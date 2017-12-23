@@ -11,4 +11,6 @@ add_compile_options(-Wno-expansion-to-defined)
 
 add_executable(mkcheck
     mkcheck/mkcheck.cpp
+    mkcheck/syscall.cpp
+    mkcheck/trace.cpp
 )

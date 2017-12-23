@@ -22,27 +22,67 @@
 #include <sys/user.h>
 #include <sys/wait.h>
 
+#include "trace.h"
+#include "syscall.h"
+
 
 
 // -----------------------------------------------------------------------------
-class TraceState {
+class ProcessState final {
 public:
-  TraceState(pid_t pid, bool entering)
+  /// Initialises the process state.
+  ProcessState(pid_t pid)
     : pid_(pid)
-    , entering_(entering)
+    , exiting_(false)
   {
   }
 
-  /// Indicates if we're entering/exiting the syscall.
-  bool IsEntering() const { return entering_; }
-  /// Toggles the enter flag.
-  void Toggle() { entering_ = !entering_; }
+  /// Indicates if we're exiting/exiting the syscall.
+  bool IsExiting() const { return exiting_; }
+
+  /// Returns the syscall number.
+  int64_t GetSyscall() const { return syscall_; }
+  /// Returns the arguments.
+  Args GetArgs() const
+  {
+    Args args;
+    args.PID = pid_;
+    args.Return = return_;
+    for (size_t i = 0; i < kSyscallArgs; ++i) {
+      args.Arg[i] = args_[i];
+    }
+    return args;
+  }
+
+  /// Extracts information from a register set.
+  void Read(const struct user_regs_struct *regs)
+  {
+    if (exiting_) {
+      return_ = regs->rax;
+      exiting_ = false;
+    } else {
+      syscall_ = regs->orig_rax;
+      args_[0] = regs->rdi;
+      args_[1] = regs->rsi;
+      args_[2] = regs->rdx;
+      args_[3] = regs->r10;
+      args_[4] = regs->r8;
+      args_[5] = regs->r9;
+      exiting_ = true;
+    }
+  }
 
 private:
   /// PID of the traced process.
   pid_t pid_;
   /// Flag to indicate if the syscall is entered/exited.
-  bool entering_;
+  bool exiting_;
+  /// List of arguments.
+  uint64_t args_[kSyscallArgs];
+  /// Return value.
+  int64_t return_;
+  /// Syscall number.
+  int64_t syscall_;
 };
 
 
@@ -110,22 +150,22 @@ static constexpr int kTraceOptions
   | PTRACE_O_TRACEVFORK
   ;
 
-#define REG_ACC  RAX
-#define REG_ARG1 RDI
-#define REG_ARG2 RSI
-
-
 // -----------------------------------------------------------------------------
 int RunTracer(pid_t pid)
 {
+  // Skip the first signal, which is SIGSTOP.
   int status;
   waitpid(pid, &status, 0);
   ptrace(PTRACE_SETOPTIONS, pid, nullptr, kTraceOptions);
 
-  std::unordered_map<pid_t, std::shared_ptr<TraceState>> tracked;
-  tracked[pid] = std::make_shared<TraceState>(pid, true);
+  // State we are tracing.
+  auto trace = std::make_unique<Trace>();
 
-  struct user_regs_struct regs;
+  // Set of tracked processses.
+  std::unordered_map<pid_t, std::shared_ptr<ProcessState>> tracked;
+  tracked[pid] = std::make_shared<ProcessState>(pid);
+
+  // Keep tracking syscalls while any process in the hierarchy is running.
   int restart_sig = 0;
   while (!tracked.empty()) {
     if (pid > 0) {
@@ -163,7 +203,7 @@ int RunTracer(pid_t pid)
         // after the new process is started, deliver it otherwise.
         auto it = tracked.find(pid);
         if (it == tracked.end()) {
-          tracked[pid] = std::make_shared<TraceState>(pid, true);
+          tracked[pid] = std::make_shared<ProcessState>(pid);
           restart_sig = 0;
         } else {
           restart_sig = SIGSTOP;
@@ -177,7 +217,8 @@ int RunTracer(pid_t pid)
       }
     }
 
-    std::shared_ptr<TraceState> state;
+    // Fetch the state desribing the process.
+    std::shared_ptr<ProcessState> state;
     {
       auto it = tracked.find(pid);
       if (it == tracked.end()) {
@@ -186,43 +227,17 @@ int RunTracer(pid_t pid)
       state = it->second;
     }
 
+    // Read syscall arguments on entry & the return value on exit.
+    struct user_regs_struct regs;
     ptrace(PTRACE_GETREGS, pid, 0, &regs);
-    switch (int syscall = regs.orig_rax) {
-      case SYS_execve: {
-        if (state->IsEntering()) {
-          // Entering execve.
-        } else {
-          // Exiting execve.
-        }
-        state->Toggle();
-        break;
-      }
-      case SYS_vfork:
-      case SYS_fork:
-      case SYS_clone: {
-        if (state->IsEntering()) {
-          // Entering fork/clone/vfork.
-        } else {
-          // Exiting fork/clone/vfork.
-        }
-        state->Toggle();
-        break;
-      }
-      case SYS_exit: {
-        // Entering SYS_exit.
-        continue;
-      }
-      default: {
-        if (state->IsEntering()) {
-          //printf("enter %d %d\n", pid, syscall);
-        } else {
-          //printf("exit %d %d\n", pid, syscall);
-        }
-        state->Toggle();
-        continue;
-      }
+    state->Read(&regs);
+
+    // On exit, process the system call.
+    if (state->IsExiting()) {
+      Handle(trace.get(), state->GetSyscall(), state->GetArgs());
     }
   }
+
   return 0;
 }
 
