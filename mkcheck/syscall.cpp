@@ -28,7 +28,6 @@ static void sys_write(Trace *trace, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_open(Trace *trace, const Args &args)
 {
-  std::cerr << ReadString(args.PID, args.Arg[0]) << std::endl;
 }
 
 // -----------------------------------------------------------------------------
@@ -48,11 +47,6 @@ static void sys_fstat(Trace *trace, const Args &args)
 
 // -----------------------------------------------------------------------------
 static void sys_lstat(Trace *trace, const Args &args)
-{
-}
-
-// -----------------------------------------------------------------------------
-static void sys_lseek(Trace *trace, const Args &args)
 {
 }
 
@@ -82,7 +76,22 @@ static void sys_pipe(Trace *trace, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_dup(Trace *trace, const Args &args)
+{
+}
+
+// -----------------------------------------------------------------------------
+static void sys_dup2(Trace *trace, const Args &args)
+{
+}
+
+// -----------------------------------------------------------------------------
 static void sys_clone(Trace *trace, const Args &args)
+{
+}
+
+// -----------------------------------------------------------------------------
+static void sys_vfork(Trace *trace, const Args &args)
 {
 }
 
@@ -102,11 +111,6 @@ static void sys_getdents(Trace *trace, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
-static void sys_getcwd(Trace *trace, const Args &args)
-{
-}
-
-// -----------------------------------------------------------------------------
 static void sys_chdir(Trace *trace, const Args &args)
 {
 }
@@ -117,17 +121,17 @@ static void sys_rename(Trace *trace, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_unlink(Trace *trace, const Args &args)
+{
+}
+
+// -----------------------------------------------------------------------------
 static void sys_readlink(Trace *trace, const Args &args)
 {
 }
 
 // -----------------------------------------------------------------------------
 static void sys_chmod(Trace *trace, const Args &args)
-{
-}
-
-// -----------------------------------------------------------------------------
-static void sys_umask(Trace *trace, const Args &args)
 {
 }
 
@@ -152,7 +156,7 @@ static const HandlerFn kHandlers[] =
   [SYS_stat           ] = sys_stat,
   [SYS_fstat          ] = sys_fstat,
   [SYS_lstat          ] = sys_lstat,
-  [SYS_lseek          ] = sys_lseek,
+  [SYS_lseek          ] = sys_ignore,
   [SYS_mmap           ] = sys_ignore,
   [SYS_mprotect       ] = sys_ignore,
   [SYS_munmap         ] = sys_ignore,
@@ -165,17 +169,23 @@ static const HandlerFn kHandlers[] =
   [SYS_readv          ] = sys_readv,
   [SYS_access         ] = sys_access,
   [SYS_pipe           ] = sys_pipe,
+  [SYS_dup            ] = sys_dup,
+  [SYS_dup2           ] = sys_dup2,
+  [SYS_getpid         ] = sys_ignore,
   [SYS_clone          ] = sys_clone,
+  [SYS_vfork          ] = sys_vfork,
   [SYS_execve         ] = sys_execve,
   [SYS_wait4          ] = sys_ignore,
   [SYS_fcntl          ] = sys_fcntl,
   [SYS_getdents       ] = sys_getdents,
-  [SYS_getcwd         ] = sys_getcwd,
+  [SYS_getcwd         ] = sys_ignore,
   [SYS_chdir          ] = sys_chdir,
   [SYS_rename         ] = sys_rename,
+  [SYS_unlink         ] = sys_unlink,
   [SYS_readlink       ] = sys_readlink,
   [SYS_chmod          ] = sys_chmod,
-  [SYS_umask          ] = sys_umask,
+  [SYS_umask          ] = sys_ignore,
+  [SYS_sysinfo        ] = sys_ignore,
   [SYS_getrlimit      ] = sys_ignore,
   [SYS_getrusage      ] = sys_ignore,
   [SYS_sigaltstack    ] = sys_ignore,
