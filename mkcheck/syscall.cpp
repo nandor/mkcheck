@@ -5,7 +5,6 @@
 #include "syscall.h"
 
 #include <cstdlib>
-#include <iostream>
 #include <stdexcept>
 #include <string>
 
@@ -88,16 +87,17 @@ static void sys_dup2(Trace *trace, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_clone(Trace *trace, const Args &args)
 {
+  if (args.Return > 0) {
+    trace->SpawnTrace(args.PID, args.Return);
+  }
 }
 
 // -----------------------------------------------------------------------------
 static void sys_vfork(Trace *trace, const Args &args)
 {
-}
-
-// -----------------------------------------------------------------------------
-static void sys_execve(Trace *trace, const Args &args)
-{
+  if (args.Return > 0) {
+    trace->SpawnTrace(args.PID, args.Return);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -174,7 +174,7 @@ static const HandlerFn kHandlers[] =
   [SYS_getpid         ] = sys_ignore,
   [SYS_clone          ] = sys_clone,
   [SYS_vfork          ] = sys_vfork,
-  [SYS_execve         ] = sys_execve,
+  [SYS_execve         ] = sys_ignore,
   [SYS_wait4          ] = sys_ignore,
   [SYS_fcntl          ] = sys_fcntl,
   [SYS_getdents       ] = sys_getdents,

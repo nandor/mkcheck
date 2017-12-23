@@ -2,6 +2,7 @@
 // Licensing information can be found in the LICENSE file.
 // (C) 2017 Nandor Licker. All rights reserved.
 
+#include <cassert>
 #include <cstdlib>
 #include <cstring>
 
@@ -22,8 +23,9 @@
 #include <sys/user.h>
 #include <sys/wait.h>
 
-#include "trace.h"
 #include "syscall.h"
+#include "trace.h"
+#include "util.h"
 
 
 
@@ -33,15 +35,26 @@ public:
   /// Initialises the process state.
   ProcessState(pid_t pid)
     : pid_(pid)
-    , exiting_(false)
+    , entering_(false)
   {
   }
 
   /// Indicates if we're exiting/exiting the syscall.
-  bool IsExiting() const { return exiting_; }
+  bool IsExiting() const { return !entering_; }
 
   /// Returns the syscall number.
   int64_t GetSyscall() const { return syscall_; }
+
+  /// Returns the return value.
+  int64_t GetReturn() const { return return_; }
+
+  /// Returns a specific argument.
+  uint64_t GetArg(size_t idx) const
+  {
+    assert(idx < kSyscallArgs);
+    return args_[idx];
+  }
+
   /// Returns the arguments.
   Args GetArgs() const
   {
@@ -57,9 +70,9 @@ public:
   /// Extracts information from a register set.
   void Read(const struct user_regs_struct *regs)
   {
-    if (exiting_) {
+    if (entering_) {
       return_ = regs->rax;
-      exiting_ = false;
+      entering_ = false;
     } else {
       syscall_ = regs->orig_rax;
       args_[0] = regs->rdi;
@@ -68,15 +81,29 @@ public:
       args_[3] = regs->r10;
       args_[4] = regs->r8;
       args_[5] = regs->r9;
-      exiting_ = true;
+      entering_ = true;
     }
+  }
+
+  /// Sets the name of the executable.
+  void SetExecutable(const std::string &exec)
+  {
+    exec_ = exec;
+  }
+
+  /// Returns the name of the executable.
+  std::string GetExecutable() const
+  {
+    return exec_;
   }
 
 private:
   /// PID of the traced process.
   pid_t pid_;
   /// Flag to indicate if the syscall is entered/exited.
-  bool exiting_;
+  bool entering_;
+  /// Name of the executable.
+  std::string exec_;
   /// List of arguments.
   uint64_t args_[kSyscallArgs];
   /// Return value.
@@ -179,6 +206,7 @@ int RunTracer(pid_t pid)
     }
 
     if (WIFEXITED(status) || WIFSIGNALED(status)) {
+      trace->EndTrace(pid);
       tracked.erase(pid);
       pid = -1;
       continue;
@@ -232,9 +260,23 @@ int RunTracer(pid_t pid)
     ptrace(PTRACE_GETREGS, pid, 0, &regs);
     state->Read(&regs);
 
-    // On exit, process the system call.
+    // Handle the system call.
+    auto sno = state->GetSyscall();
+    if (sno == SYS_execve) {
+      // Execve is special since its arguments can't be read once the
+      // process image is replaced, thus the argument is read on entry.
+      if (state->IsExiting()) {
+        if (state->GetReturn() >= 0) {
+          trace->StartTrace(pid, state->GetExecutable());
+        }
+      } else {
+        state->SetExecutable(ReadString(pid, state->GetArg(0)));
+      }
+    }
+
+    // All other system calls are handled on exit.
     if (state->IsExiting()) {
-      Handle(trace.get(), state->GetSyscall(), state->GetArgs());
+      Handle(trace.get(), sno, state->GetArgs());
     }
   }
 
