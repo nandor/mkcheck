@@ -39,6 +39,15 @@ public:
   /// Returns the name of the image.
   std::string GetImage() const { return image_; }
 
+  /// Adds an input without associating it with a descriptor.
+  void AddInput(const std::string &path);
+  /// Adds an input attached to a descriptor.
+  void AddInput(const std::string &path, int fd);
+  /// Adds an output attached to a descriptor.
+  void AddOutput(const std::string &path, int fd);
+  /// Closes a descriptor so it can be reused.
+  void Close(int fd);
+
 private:
   /// Pointer to the trace.
   Trace *trace_;

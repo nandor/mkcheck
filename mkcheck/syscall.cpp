@@ -9,22 +9,15 @@
 #include <stdexcept>
 #include <string>
 
+#include <fcntl.h>
 #include <sys/syscall.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "trace.h"
 #include "util.h"
 
 
-
-// -----------------------------------------------------------------------------
-static void sys_read(Trace *trace, const Args &args)
-{
-}
-
-// -----------------------------------------------------------------------------
-static void sys_write(Trace *trace, const Args &args)
-{
-}
 
 // -----------------------------------------------------------------------------
 static void sys_open(Trace *trace, const Args &args)
@@ -34,46 +27,48 @@ static void sys_open(Trace *trace, const Args &args)
   }
 
   auto proc = trace->GetTrace(args.PID);
+  const std::string path = ReadString(args.PID, args.Arg[0]);
+  const uint64_t flags = args.Arg[1];
+  const int fd = args.Return;
+
+  if (flags & O_CREAT) {
+    proc->AddOutput(path, fd);
+  } else {
+    proc->AddInput(path, fd);
+  }
 }
 
 // -----------------------------------------------------------------------------
 static void sys_close(Trace *trace, const Args &args)
 {
+  if (args.Return < 0) {
+    return;
+  }
+  trace->GetTrace(args.PID)->Close(args.Arg[0]);
 }
 
 // -----------------------------------------------------------------------------
 static void sys_stat(Trace *trace, const Args &args)
 {
-}
-
-// -----------------------------------------------------------------------------
-static void sys_fstat(Trace *trace, const Args &args)
-{
+  if (args.Return < 0) {
+    return;
+  }
+  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args.Arg[0]));
 }
 
 // -----------------------------------------------------------------------------
 static void sys_lstat(Trace *trace, const Args &args)
 {
-}
-
-// -----------------------------------------------------------------------------
-static void sys_ioctl(Trace *trace, const Args &args)
-{
-}
-
-// -----------------------------------------------------------------------------
-static void sys_pread64(Trace *trace, const Args &args)
-{
-}
-
-// -----------------------------------------------------------------------------
-static void sys_readv(Trace *trace, const Args &args)
-{
+  if (args.Return < 0) {
+    return;
+  }
+  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args.Arg[0]));
 }
 
 // -----------------------------------------------------------------------------
 static void sys_access(Trace *trace, const Args &args)
 {
+  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args.Arg[0]));
 }
 
 // -----------------------------------------------------------------------------
@@ -89,22 +84,6 @@ static void sys_dup(Trace *trace, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_dup2(Trace *trace, const Args &args)
 {
-}
-
-// -----------------------------------------------------------------------------
-static void sys_clone(Trace *trace, const Args &args)
-{
-  if (args.Return > 0) {
-    trace->SpawnTrace(args.PID, args.Return);
-  }
-}
-
-// -----------------------------------------------------------------------------
-static void sys_vfork(Trace *trace, const Args &args)
-{
-  if (args.Return > 0) {
-    trace->SpawnTrace(args.PID, args.Return);
-  }
 }
 
 // -----------------------------------------------------------------------------
@@ -156,12 +135,12 @@ typedef void (*HandlerFn) (Trace *trace, const Args &args);
 
 static const HandlerFn kHandlers[] =
 {
-  [SYS_read           ] = sys_read,
-  [SYS_write          ] = sys_write,
+  [SYS_read           ] = sys_ignore,
+  [SYS_write          ] = sys_ignore,
   [SYS_open           ] = sys_open,
   [SYS_close          ] = sys_close,
   [SYS_stat           ] = sys_stat,
-  [SYS_fstat          ] = sys_fstat,
+  [SYS_fstat          ] = sys_ignore,
   [SYS_lstat          ] = sys_lstat,
   [SYS_lseek          ] = sys_ignore,
   [SYS_mmap           ] = sys_ignore,
@@ -171,16 +150,16 @@ static const HandlerFn kHandlers[] =
   [SYS_rt_sigaction   ] = sys_ignore,
   [SYS_rt_sigprocmask ] = sys_ignore,
   [SYS_rt_sigreturn   ] = sys_ignore,
-  [SYS_ioctl          ] = sys_ioctl,
-  [SYS_pread64        ] = sys_pread64,
-  [SYS_readv          ] = sys_readv,
+  [SYS_ioctl          ] = sys_ignore,
+  [SYS_pread64        ] = sys_ignore,
+  [SYS_readv          ] = sys_ignore,
   [SYS_access         ] = sys_access,
   [SYS_pipe           ] = sys_pipe,
   [SYS_dup            ] = sys_dup,
   [SYS_dup2           ] = sys_dup2,
   [SYS_getpid         ] = sys_ignore,
-  [SYS_clone          ] = sys_clone,
-  [SYS_vfork          ] = sys_vfork,
+  [SYS_clone          ] = sys_ignore,
+  [SYS_vfork          ] = sys_ignore,
   [SYS_execve         ] = sys_ignore,
   [SYS_wait4          ] = sys_ignore,
   [SYS_fcntl          ] = sys_fcntl,

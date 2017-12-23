@@ -226,11 +226,16 @@ int RunTracer(Trace *trace, pid_t pid)
         continue;
       }
       case SIGSTOP: {
+        // Get the ID of the parent process.
+        pid_t parent;
+        ptrace(PTRACE_GETEVENTMSG, pid, 0, &parent);
+
         // Ignore the first SIGSTOP in each process since it is dispatched
         // after the new process is started, deliver it otherwise.
         auto it = tracked.find(pid);
         if (it == tracked.end()) {
           tracked[pid] = std::make_shared<ProcessState>(pid);
+          trace->SpawnTrace(parent, pid);
           restart_sig = 0;
         } else {
           restart_sig = SIGSTOP;
