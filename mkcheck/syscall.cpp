@@ -5,6 +5,7 @@
 #include "syscall.h"
 
 #include <cstdlib>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 
@@ -12,6 +13,7 @@
 
 #include "trace.h"
 #include "util.h"
+
 
 
 // -----------------------------------------------------------------------------
@@ -27,6 +29,11 @@ static void sys_write(Trace *trace, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_open(Trace *trace, const Args &args)
 {
+  if (args.Return < 0) {
+    return;
+  }
+
+  auto proc = trace->GetTrace(args.PID);
 }
 
 // -----------------------------------------------------------------------------
@@ -206,7 +213,7 @@ void Handle(Trace *trace, int64_t sno, const Args &args)
   }
 
   if (sno > sizeof(kHandlers) / sizeof(kHandlers[0]) || !kHandlers[sno]) {
-    throw std::runtime_error("Unhandled syscall: " + std::to_string(sno));
+    throw std::runtime_error("Unknown syscall: " + std::to_string(sno));
   }
 
   kHandlers[sno](trace, args);

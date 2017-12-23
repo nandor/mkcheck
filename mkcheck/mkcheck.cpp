@@ -185,6 +185,7 @@ int RunTracer(Trace *trace, pid_t pid)
   int status;
   waitpid(pid, &status, 0);
   ptrace(PTRACE_SETOPTIONS, pid, nullptr, kTraceOptions);
+  trace->SpawnTrace(0, pid);
 
   // Set of tracked processses.
   std::unordered_map<pid_t, std::shared_ptr<ProcessState>> tracked;
