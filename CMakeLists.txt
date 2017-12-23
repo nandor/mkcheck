@@ -13,4 +13,5 @@ add_executable(mkcheck
     mkcheck/mkcheck.cpp
     mkcheck/syscall.cpp
     mkcheck/trace.cpp
+    mkcheck/util.cpp
 )

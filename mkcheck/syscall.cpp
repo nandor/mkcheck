@@ -2,14 +2,17 @@
 // Licensing information can be found in the LICENSE file.
 // (C) 2017 Nandor Licker. All rights reserved.
 
+#include "syscall.h"
+
 #include <cstdlib>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 
 #include <sys/syscall.h>
 
-#include "syscall.h"
 #include "trace.h"
+#include "util.h"
 
 
 // -----------------------------------------------------------------------------
@@ -25,6 +28,7 @@ static void sys_write(Trace *trace, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_open(Trace *trace, const Args &args)
 {
+  std::cerr << ReadString(args.PID, args.Arg[0]) << std::endl;
 }
 
 // -----------------------------------------------------------------------------
@@ -137,8 +141,6 @@ static void sys_ignore(Trace *trace, const Args &args)
 {
 }
 
-
-// -----------------------------------------------------------------------------
 typedef void (*HandlerFn) (Trace *trace, const Args &args);
 
 static const HandlerFn kHandlers[] =
@@ -196,4 +198,6 @@ void Handle(Trace *trace, int64_t sno, const Args &args)
   if (sno > sizeof(kHandlers) / sizeof(kHandlers[0]) || !kHandlers[sno]) {
     throw std::runtime_error("Unhandled syscall: " + std::to_string(sno));
   }
+
+  kHandlers[sno](trace, args);
 }
