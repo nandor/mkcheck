@@ -12,6 +12,7 @@
 #include <vector>
 #include <unordered_map>
 
+#include <getopt.h>
 #include <limits.h>
 #include <signal.h>
 #include <unistd.h>
@@ -178,15 +179,12 @@ static constexpr int kTraceOptions
   ;
 
 // -----------------------------------------------------------------------------
-int RunTracer(pid_t pid)
+int RunTracer(Trace *trace, pid_t pid)
 {
   // Skip the first signal, which is SIGSTOP.
   int status;
   waitpid(pid, &status, 0);
   ptrace(PTRACE_SETOPTIONS, pid, nullptr, kTraceOptions);
-
-  // State we are tracing.
-  auto trace = std::make_unique<Trace>();
 
   // Set of tracked processses.
   std::unordered_map<pid_t, std::shared_ptr<ProcessState>> tracked;
@@ -276,7 +274,7 @@ int RunTracer(pid_t pid)
 
     // All other system calls are handled on exit.
     if (state->IsExiting()) {
-      Handle(trace.get(), sno, state->GetArgs());
+      Handle(trace, sno, state->GetArgs());
     }
   }
 
@@ -284,27 +282,61 @@ int RunTracer(pid_t pid)
 }
 
 // -----------------------------------------------------------------------------
+static struct option kOptions[] =
+{
+  { "output",  required_argument, 0, 'o' },
+};
+
+// -----------------------------------------------------------------------------
 int main(int argc, char **argv)
 {
-  if (argc < 2) {
-    std::cerr << "Missing arguments." << std::endl;
-    return EXIT_FAILURE;
+  // Parse arguments.
+  std::string output;
+  {
+    int c = 0, idx = 0;
+    while (c >= 0) {
+      switch (c = getopt_long(argc, argv, "", kOptions, &idx)) {
+        case -1: {
+          break;
+        }
+        case 'o': {
+          output = optarg;
+          continue;
+        }
+        default: {
+          std::cerr << "Unknown option." << std::endl;
+          return EXIT_FAILURE;
+        }
+      }
+    }
+    if (output.empty()) {
+      std::cerr << "Missing output directory." << std::endl;
+      return EXIT_FAILURE;
+    }
+    if (optind == argc) {
+      std::cerr << "Missing executable." << std::endl;
+      return EXIT_FAILURE;
+    }
   }
 
+  // Create the tracer.
+  auto trace = std::make_unique<Trace>(output);
+
+  // Fork & start tracing.
   switch (pid_t pid = fork()) {
     case -1: {
       return EXIT_FAILURE;
     }
     case 0: {
       std::vector<char *> args;
-      for (int i = 1; i < argc; ++i) {
+      for (int i = optind; i < argc; ++i) {
         args.push_back(argv[i]);
       }
       args.push_back(nullptr);
-      return RunChild(argv[1], args);
+      return RunChild(args[0], args);
     }
     default: {
-      return RunTracer(pid);
+      return RunTracer(trace.get(), pid);
     }
   }
 

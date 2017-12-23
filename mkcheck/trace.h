@@ -29,7 +29,14 @@ private:
  */
 class Trace final {
 public:
-  /// Destroys all traces.
+  /**
+   * Initiates a new trace, storing output in the specified directory.
+   */
+  Trace(const std::string &output);
+
+  /**
+   * Cleanup.
+   */
   ~Trace();
 
   /// Spawns a new process.
