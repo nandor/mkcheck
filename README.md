@@ -1,0 +1,2 @@
+# mkcheck
+Incremental Build Verification
