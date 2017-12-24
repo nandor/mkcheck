@@ -5,7 +5,10 @@
 #include "trace.h"
 
 #include <cassert>
+#include <climits>
 #include <iostream>
+
+#include <unistd.h>
 
 
 
@@ -49,13 +52,30 @@ Trace::~Trace()
 // -----------------------------------------------------------------------------
 void Trace::SpawnTrace(pid_t parent, pid_t pid)
 {
+  // Find the working directory.
+  std::string cwd;
+  std::string image;
+  {
+    auto it = procs_.find(parent);
+    if (it == procs_.end()) {
+      char buffer[PATH_MAX];
+      getcwd(buffer, PATH_MAX);
+      cwd = buffer;
+    } else {
+      auto proc = it->second;
+      cwd = proc->GetCwd();
+      image = proc->GetImage();
+    }
+  }
+
   // Create the COW trace.
   procs_.emplace(pid, std::make_shared<Process>(
       this,
       parent,
       pid,
       nextUID_++,
-      "",
+      image,
+      cwd,
       true
   ));
 }
@@ -75,6 +95,7 @@ void Trace::StartTrace(pid_t pid, const std::string &image)
       pid,
       nextUID_++,
       image,
+      proc->GetCwd(),
       false
   );
 }
@@ -97,4 +118,9 @@ Process *Trace::GetTrace(pid_t pid)
 void Trace::Unlink(const std::string &path)
 {
 
+}
+
+// -----------------------------------------------------------------------------
+void Trace::Rename(const std::string &from, const std::string &to)
+{
 }

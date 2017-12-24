@@ -23,8 +23,8 @@
 static void sys_open(Trace *trace, const Args &args)
 {
   auto proc = trace->GetTrace(args.PID);
-  const std::string path = ReadString(args.PID, args.Arg[0]);
-  const uint64_t flags = args.Arg[1];
+  const std::string path = ReadString(args.PID, args[0]);
+  const uint64_t flags = args[1];
   const int fd = args.Return;
 
   if ((flags & O_WRONLY) || (flags & O_RDWR) || (flags & O_CREAT)) {
@@ -42,32 +42,32 @@ static void sys_close(Trace *trace, const Args &args)
   if (args.Return < 0) {
     return;
   }
-  trace->GetTrace(args.PID)->Close(args.Arg[0]);
+  trace->GetTrace(args.PID)->Close(args[0]);
 }
 
 // -----------------------------------------------------------------------------
 static void sys_stat(Trace *trace, const Args &args)
 {
-  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args.Arg[0]));
+  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
 }
 
 // -----------------------------------------------------------------------------
 static void sys_lstat(Trace *trace, const Args &args)
 {
-  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args.Arg[0]));
+  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
 }
 
 // -----------------------------------------------------------------------------
 static void sys_access(Trace *trace, const Args &args)
 {
-  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args.Arg[0]));
+  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
 }
 
 // -----------------------------------------------------------------------------
 static void sys_dup(Trace *trace, const Args &args)
 {
   if (args.Return < 0) {
-    trace->GetTrace(args.PID)->Duplicate(args.Arg[0], args.Return);
+    trace->GetTrace(args.PID)->Duplicate(args[0], args.Return);
   }
 }
 
@@ -75,32 +75,36 @@ static void sys_dup(Trace *trace, const Args &args)
 static void sys_dup2(Trace *trace, const Args &args)
 {
   if (args.Return < 0) {
-    trace->GetTrace(args.PID)->Duplicate(args.Arg[0], args.Return);
+    trace->GetTrace(args.PID)->Duplicate(args[0], args.Return);
   }
 }
 
 // -----------------------------------------------------------------------------
 static void sys_chdir(Trace *trace, const Args &args)
 {
-  // TODO: keep track of working directories.
+  if (args.Return < 0) {
+    return;
+  }
+  trace->GetTrace(args.PID)->SetCwd(ReadString(args.PID, args[0]));
 }
 
 // -----------------------------------------------------------------------------
 static void sys_rename(Trace *trace, const Args &args)
 {
+  trace->Rename(ReadString(args.PID, args[0]), ReadString(args.PID, args[0]));
   // TODO: handle aliasing.
 }
 
 // -----------------------------------------------------------------------------
 static void sys_unlink(Trace *trace, const Args &args)
 {
-  trace->Unlink(ReadString(args.PID, args.Arg[0]));
+  trace->Unlink(ReadString(args.PID, args[0]));
 }
 
 // -----------------------------------------------------------------------------
 static void sys_readlink(Trace *trace, const Args &args)
 {
-  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args.Arg[0]));
+  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
 }
 
 

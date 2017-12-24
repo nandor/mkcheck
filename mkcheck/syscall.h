@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 
@@ -27,6 +28,12 @@ struct Args {
   int64_t Return;
   /// List of arguments.
   uint64_t Arg[kSyscallArgs];
+
+  uint64_t operator[] (size_t idx) const
+  {
+    assert(idx <= kSyscallArgs);
+    return Arg[idx];
+  }
 };
 
 

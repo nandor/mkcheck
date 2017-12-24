@@ -24,12 +24,14 @@ public:
       pid_t pid,
       uint64_t uid,
       const std::string &image,
+      const std::string &cwd,
       bool isCOW)
     : trace_(trace)
     , parent_(parent)
     , pid_(pid)
     , uid_(uid)
     , image_(image)
+    , cwd_(cwd)
     , isCOW_(isCOW)
   {
   }
@@ -38,6 +40,8 @@ public:
   pid_t GetParent() const { return parent_; }
   /// Returns the name of the image.
   std::string GetImage() const { return image_; }
+  /// Returns the working directory.
+  std::string GetCwd() const { return cwd_; }
 
   /// Adds an input without associating it with a descriptor.
   void AddInput(const std::string &path);
@@ -49,6 +53,8 @@ public:
   void Close(int fd);
   /// Duplicates a file descriptor.
   void Duplicate(int oldFd, int newFd);
+  /// Sets the working directory.
+  void SetCwd(const std::string &cwd) { cwd_ = cwd; }
 
 private:
   /// Pointer to the trace.
@@ -61,6 +67,8 @@ private:
   uint64_t uid_;
   /// Name of the image.
   std::string image_;
+  /// Working directory.
+  std::string cwd_;
   /// If image is copy-on-write.
   bool isCOW_;
   /// Open files.
@@ -95,6 +103,8 @@ public:
 
   /// Unlinks a file.
   void Unlink(const std::string &path);
+  /// Renames a file.
+  void Rename(const std::string &from, const std::string &to);
 
 private:
   /// Output directory.
