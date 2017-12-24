@@ -91,14 +91,16 @@ static void sys_chdir(Trace *trace, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_rename(Trace *trace, const Args &args)
 {
-  trace->Rename(ReadString(args.PID, args[0]), ReadString(args.PID, args[0]));
-  // TODO: handle aliasing.
+  trace->GetTrace(args.PID)->Rename(
+      ReadString(args.PID, args[0]), 
+      ReadString(args.PID, args[0])
+  );
 }
 
 // -----------------------------------------------------------------------------
 static void sys_unlink(Trace *trace, const Args &args)
 {
-  trace->Unlink(ReadString(args.PID, args[0]));
+  trace->GetTrace(args.PID)->Unlink(ReadString(args.PID, args[0]));
 }
 
 // -----------------------------------------------------------------------------
