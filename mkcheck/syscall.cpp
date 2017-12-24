@@ -22,17 +22,15 @@
 // -----------------------------------------------------------------------------
 static void sys_open(Trace *trace, const Args &args)
 {
-  if (args.Return < 0) {
-    return;
-  }
-
   auto proc = trace->GetTrace(args.PID);
   const std::string path = ReadString(args.PID, args.Arg[0]);
   const uint64_t flags = args.Arg[1];
   const int fd = args.Return;
 
-  if (flags & O_CREAT) {
-    proc->AddOutput(path, fd);
+  if ((flags & O_WRONLY) || (flags & O_RDWR) || (flags & O_CREAT)) {
+    if (args.Return > 0) {
+      proc->AddOutput(path, fd);
+    }
   } else {
     proc->AddInput(path, fd);
   }
@@ -50,18 +48,12 @@ static void sys_close(Trace *trace, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_stat(Trace *trace, const Args &args)
 {
-  if (args.Return < 0) {
-    return;
-  }
   trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args.Arg[0]));
 }
 
 // -----------------------------------------------------------------------------
 static void sys_lstat(Trace *trace, const Args &args)
 {
-  if (args.Return < 0) {
-    return;
-  }
   trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args.Arg[0]));
 }
 
@@ -72,59 +64,46 @@ static void sys_access(Trace *trace, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
-static void sys_pipe(Trace *trace, const Args &args)
-{
-}
-
-// -----------------------------------------------------------------------------
 static void sys_dup(Trace *trace, const Args &args)
 {
+  if (args.Return < 0) {
+    trace->GetTrace(args.PID)->Duplicate(args.Arg[0], args.Return);
+  }
 }
 
 // -----------------------------------------------------------------------------
 static void sys_dup2(Trace *trace, const Args &args)
 {
-}
-
-// -----------------------------------------------------------------------------
-static void sys_fcntl(Trace *trace, const Args &args)
-{
-}
-
-// -----------------------------------------------------------------------------
-static void sys_getdents(Trace *trace, const Args &args)
-{
+  if (args.Return < 0) {
+    trace->GetTrace(args.PID)->Duplicate(args.Arg[0], args.Return);
+  }
 }
 
 // -----------------------------------------------------------------------------
 static void sys_chdir(Trace *trace, const Args &args)
 {
+  // TODO: keep track of working directories.
 }
 
 // -----------------------------------------------------------------------------
 static void sys_rename(Trace *trace, const Args &args)
 {
+  // TODO: handle aliasing.
 }
 
 // -----------------------------------------------------------------------------
 static void sys_unlink(Trace *trace, const Args &args)
 {
+  trace->Unlink(ReadString(args.PID, args.Arg[0]));
 }
 
 // -----------------------------------------------------------------------------
 static void sys_readlink(Trace *trace, const Args &args)
 {
+  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args.Arg[0]));
 }
 
-// -----------------------------------------------------------------------------
-static void sys_chmod(Trace *trace, const Args &args)
-{
-}
 
-// -----------------------------------------------------------------------------
-static void sys_pipe2(Trace *trace, const Args &args)
-{
-}
 
 // -----------------------------------------------------------------------------
 static void sys_ignore(Trace *trace, const Args &args)
@@ -154,7 +133,7 @@ static const HandlerFn kHandlers[] =
   [SYS_pread64        ] = sys_ignore,
   [SYS_readv          ] = sys_ignore,
   [SYS_access         ] = sys_access,
-  [SYS_pipe           ] = sys_pipe,
+  [SYS_pipe           ] = sys_ignore,
   [SYS_dup            ] = sys_dup,
   [SYS_dup2           ] = sys_dup2,
   [SYS_getpid         ] = sys_ignore,
@@ -162,14 +141,14 @@ static const HandlerFn kHandlers[] =
   [SYS_vfork          ] = sys_ignore,
   [SYS_execve         ] = sys_ignore,
   [SYS_wait4          ] = sys_ignore,
-  [SYS_fcntl          ] = sys_fcntl,
-  [SYS_getdents       ] = sys_getdents,
+  [SYS_fcntl          ] = sys_ignore,
+  [SYS_getdents       ] = sys_ignore,
   [SYS_getcwd         ] = sys_ignore,
   [SYS_chdir          ] = sys_chdir,
   [SYS_rename         ] = sys_rename,
   [SYS_unlink         ] = sys_unlink,
   [SYS_readlink       ] = sys_readlink,
-  [SYS_chmod          ] = sys_chmod,
+  [SYS_chmod          ] = sys_ignore,
   [SYS_umask          ] = sys_ignore,
   [SYS_sysinfo        ] = sys_ignore,
   [SYS_getrlimit      ] = sys_ignore,
@@ -181,7 +160,7 @@ static const HandlerFn kHandlers[] =
   [SYS_set_tid_address] = sys_ignore,
   [SYS_exit_group     ] = sys_ignore,
   [SYS_set_robust_list] = sys_ignore,
-  [SYS_pipe2          ] = sys_pipe2,
+  [SYS_pipe2          ] = sys_ignore,
 };
 
 // -----------------------------------------------------------------------------

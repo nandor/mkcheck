@@ -12,28 +12,27 @@
 // -----------------------------------------------------------------------------
 void Process::AddInput(const std::string &path)
 {
-
 }
 
 // -----------------------------------------------------------------------------
 void Process::AddInput(const std::string &path, int fd)
 {
-
 }
 
 // -----------------------------------------------------------------------------
 void Process::AddOutput(const std::string &path, int fd)
 {
-
 }
 
 // -----------------------------------------------------------------------------
 void Process::Close(int fd)
 {
-
 }
 
-
+// -----------------------------------------------------------------------------
+void Process::Duplicate(int oldFd, int newFd)
+{
+}
 
 // -----------------------------------------------------------------------------
 Trace::Trace(const std::string &output)
@@ -92,4 +91,10 @@ Process *Trace::GetTrace(pid_t pid)
   auto it = procs_.find(pid);
   assert(it != procs_.end());
   return it->second.get();
+}
+
+// -----------------------------------------------------------------------------
+void Trace::Unlink(const std::string &path)
+{
+
 }

@@ -47,6 +47,8 @@ public:
   void AddOutput(const std::string &path, int fd);
   /// Closes a descriptor so it can be reused.
   void Close(int fd);
+  /// Duplicates a file descriptor.
+  void Duplicate(int oldFd, int newFd);
 
 private:
   /// Pointer to the trace.
@@ -91,11 +93,18 @@ public:
   /// Returns the process for a PID.
   Process *GetTrace(pid_t pid);
 
+  /// Unlinks a file.
+  void Unlink(const std::string &path);
+
 private:
   /// Output directory.
   const std::string output_;
   /// Next available UID.
   uint64_t nextUID_;
-  /// List of processes.
+  /// Next available file ID.
+  uint64_t nextFID_;
+  /// Map of processes.
   std::unordered_map<pid_t, std::shared_ptr<Process>> procs_;
+  /// Map of files.
+  std::unordered_map<std::string, uint64_t> files_;
 };

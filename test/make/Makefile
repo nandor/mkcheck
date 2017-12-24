@@ -2,7 +2,7 @@
 # Licensing information can be found in the LICENSE file.
 # (C) 2017 Nandor Licker. All rights reserved.
 
-CC = gcc
+CC = clang
 
 .PHONY: all clean
 
