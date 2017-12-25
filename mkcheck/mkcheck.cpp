@@ -154,10 +154,10 @@ std::string FindExecutable(const std::string &exec)
     }
 
     if (S_ISREG(st.st_mode) && st.st_mode & S_IXUSR) {
-      break;
+      return pathname;
     }
   }
-  return pathname;
+  throw std::runtime_error("Cannot find executable.");
 }
 
 // -----------------------------------------------------------------------------
@@ -165,7 +165,7 @@ int RunChild(const std::string &exec, const std::vector<char *> &args)
 {
   ptrace(PTRACE_TRACEME);
   raise(SIGSTOP);
-  return execvp(FindExecutable(exec).c_str(), args.data());
+  return execvp(exec.c_str(), args.data());
 }
 
 // -----------------------------------------------------------------------------
@@ -298,6 +298,8 @@ int main(int argc, char **argv)
 {
   // Parse arguments.
   std::string output;
+  std::string exec;
+  std::vector<char *> args;
   {
     int c = 0, idx = 0;
     while (c >= 0) {
@@ -315,6 +317,7 @@ int main(int argc, char **argv)
         }
       }
     }
+
     if (output.empty()) {
       std::cerr << "Missing output directory." << std::endl;
       return EXIT_FAILURE;
@@ -323,6 +326,12 @@ int main(int argc, char **argv)
       std::cerr << "Missing executable." << std::endl;
       return EXIT_FAILURE;
     }
+
+    for (int i = optind; i < argc; ++i) {
+      args.push_back(argv[i]);
+    }
+    args.push_back(nullptr);
+    exec = FindExecutable(args[0]);
   }
 
   // Create the tracer.
@@ -334,12 +343,7 @@ int main(int argc, char **argv)
       return EXIT_FAILURE;
     }
     case 0: {
-      std::vector<char *> args;
-      for (int i = optind; i < argc; ++i) {
-        args.push_back(argv[i]);
-      }
-      args.push_back(nullptr);
-      return RunChild(args[0], args);
+      return RunChild(exec, args);
     }
     default: {
       return RunTracer(trace.get(), pid);

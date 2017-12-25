@@ -6,7 +6,9 @@
 
 #include <memory>
 #include <string>
+#include <set>
 #include <unordered_map>
+#include <vector>
 
 #include <boost/filesystem.hpp>
 
@@ -27,7 +29,7 @@ public:
       pid_t parent,
       pid_t pid,
       uint64_t uid,
-      const fs::path &image,
+      uint64_t image,
       const fs::path &cwd,
       bool isCOW)
     : trace_(trace)
@@ -40,23 +42,20 @@ public:
   {
   }
 
+  /// Destroys the process & writes data to a file.
+  ~Process();
+
   /// Returns the parent.
   pid_t GetParent() const { return parent_; }
   /// Returns the name of the image.
-  fs::path GetImage() const { return image_; }
+  uint64_t GetImage() const { return image_; }
   /// Returns the working directory.
   fs::path GetCwd() const { return cwd_; }
 
-  /// Adds an input without associating it with a descriptor.
+  /// Adds an input file to a process.
   void AddInput(const fs::path &path);
-  /// Adds an input attached to a descriptor.
-  void AddInput(const fs::path &path, int fd);
-  /// Adds an output attached to a descriptor.
-  void AddOutput(const fs::path &path, int fd);
-  /// Closes a descriptor so it can be reused.
-  void Close(int fd);
-  /// Duplicates a file descriptor.
-  void Duplicate(int oldFd, int newFd);
+  /// Adds an output file to a process.
+  void AddOutput(const fs::path &path);
   /// Sets the working directory.
   void SetCwd(const fs::path &cwd) { cwd_ = cwd; }
   /// Unlinks a file.
@@ -66,25 +65,29 @@ public:
 
 private:
   /// Resolves a file to a unique identifier.
-  uint64_t Resolve(const fs::path &path);
+  fs::path Normalise(const fs::path &path);
 
 private:
   /// Pointer to the trace.
   Trace *trace_;
   /// Parent identifier.
-  pid_t parent_;
+  const pid_t parent_;
   /// Process identifier.
-  pid_t pid_;
+  const pid_t pid_;
   /// Unique instance identifier.
-  uint64_t uid_;
+  const uint64_t uid_;
   /// Name of the image.
-  fs::path image_;
+  const uint64_t image_;
   /// Working directory.
   fs::path cwd_;
   /// If image is copy-on-write.
   bool isCOW_;
   /// Open files.
   std::unordered_map<int64_t, std::string> files_;
+  /// Input files.
+  std::set<uint64_t> inputs_;
+  /// Output files.
+  std::set<uint64_t> outputs_;
 };
 
 
@@ -104,6 +107,9 @@ public:
    */
   ~Trace();
 
+  /// Returns the path to the output directory.
+  fs::path GetOutput() const { return output_; }
+
   /// Spawns a new process.
   void SpawnTrace(pid_t parent, pid_t pid);
   /// Starts a new trace.
@@ -112,6 +118,12 @@ public:
   void EndTrace(pid_t pid);
   /// Returns the process for a PID.
   Process *GetTrace(pid_t pid);
+  /// Unlinks a file.
+  void Unlink(const fs::path &path);
+  /// Renames a file.
+  void Rename(const fs::path &from, const fs::path &to);
+  /// Finds a file.
+  uint64_t Find(const fs::path &path);
 
 private:
   /// Output directory.
@@ -122,6 +134,8 @@ private:
   uint64_t nextFID_;
   /// Map of processes.
   std::unordered_map<pid_t, std::shared_ptr<Process>> procs_;
-  /// Map of files.
-  std::unordered_map<std::string, uint64_t> files_;
+  /// Map of files to current IDs.
+  std::unordered_map<std::string, uint64_t> fileIDs_;
+  /// Set of names attached to an ID.
+  std::unordered_map<uint64_t, std::vector<std::string>> fileNames_;
 };
