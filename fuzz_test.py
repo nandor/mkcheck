@@ -2,13 +2,13 @@
 
 import os
 import subprocess
+import time
 
 # Project directory.
 project = '/home/nand/Projects/mkcheck'
 toolPath = os.path.join(project, 'build/mkcheck')
 rootPath = os.path.join(project, 'test/make')
 tmpPath = os.path.join(project, 'tmp')
-outPath = os.path.join(project, 'tmp/out_clean')
 
 # Run a clean build.
 subprocess.check_call(
@@ -22,7 +22,6 @@ subprocess.check_call(
 # Find the initial timestamps of the tracked files.
 tracked = set()
 for dirName, subdirList, fileList in os.walk(rootPath, topdown=False):
-  tracked.add(dirName)
   for fileName in fileList:
     tracked.add(os.path.join(dirName, fileName))
 
@@ -34,7 +33,7 @@ for entry in tracked:
 subprocess.check_call(
   [
     toolPath,
-    "--output={0}".format(outPath),
+    "--output={0}".format(os.path.join(tmpPath, 'out_clean')),
     "make"
   ],
   cwd=rootPath
@@ -42,10 +41,12 @@ subprocess.check_call(
 
 # Run the build after touching each file.
 for idx, file in zip(range(len(tracked)), tracked):
-  print 'Touching ', file
+  time.sleep(1)
+
+  print '\n\nTouching ', idx, ' ', file
   os.utime(file, None)
 
-  metaDir = '{0}_{1}'.format(outPath, idx)
+  metaDir = os.path.join(tmpPath, 'out_{0}'.format(idx))
   subprocess.check_call(
     [
       toolPath,

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import sys
 from graphviz import Digraph
 
 
@@ -14,10 +15,10 @@ g = Digraph(comment='Build Graph')
 g.attr(rankdir='LR')
 
 PREFIX = '/home/nand/Projects/mkcheck/test/make'
-PATH = 'test/out'
+PATH = sys.argv[1]
 
 names = {}
-rendered = set()
+known_files = {}
 with open(os.path.join(PATH, 'files'), 'r') as f:
   for line in f.readlines():
     tokens = line.strip().split(' ')
@@ -29,10 +30,10 @@ with open(os.path.join(PATH, 'files'), 'r') as f:
     if name.startswith(PREFIX):
       file = name[len(PREFIX):]
       if file != '' and file != '/.':
-        rendered.add(uid)
-        g.node('f' + str(uid), str(uid) + ': ' + file[1:])
+        known_files[uid] = file[1:]
 
 procs = [int(proc) for proc in os.listdir(PATH) if proc != 'files' and proc != 'file']
+rendered = set()
 for proc in procs:
   with open(os.path.join(PATH, str(proc)), 'r') as f:
     [uid, parent, image], outputs, inputs = process(f.readlines())
@@ -44,14 +45,19 @@ for proc in procs:
 
     if len(outputs) > 0:
       for f in inputs:
-        if f in rendered:
+        if f in known_files:
           g.edge('f' + str(f), 'p' + str(uid))
+          rendered.add(f)
 
       for f in outputs:
-        if f in rendered:
+        if f in known_files:
           g.edge('p' + str(uid), 'f' + str(f))
+          rendered.add(f)
 
     if parent != 0:
       g.edge('p' + str(parent), 'p' + str(uid), color='red')
+
+for fid in rendered:
+  g.node('f' + str(fid), str(fid) + ': ' + known_files[fid])
 
 g.render('graph/test', view=False)

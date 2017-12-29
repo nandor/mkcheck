@@ -18,10 +18,10 @@ $(OUT)/lib_a.o : $(OUT) lib_a/lib_a.c lib_a/lib_a.h
 $(OUT)/lib_b.o : $(OUT) lib_b/lib_b.c lib_b/lib_b.h
 	$(CC) -c -o $(OUT)/lib_b.o lib_b/lib_b.c
 
-$(OUT)/a.o : $(OUT) a.c a.h $(OUT)/lib_a.o
+$(OUT)/a.o : $(OUT) a.c a.h
 	$(CC) -c -o $(OUT)/a.o a.c
 
-$(OUT)/b.o : $(OUT) b.c b.h $(OUT)/lib_b.o
+$(OUT)/b.o : $(OUT) b.c b.h
 	$(CC) -c -o $(OUT)/b.o b.c
 
 $(OUT)/c.o : $(OUT) c.c c.h

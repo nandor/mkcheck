@@ -77,7 +77,7 @@ Trace::Trace(const fs::path &output)
   if (fs::exists(output)) {
     fs::remove_all(output);
   }
-  if (!fs::create_directory(output)) {
+  if (!fs::create_directories(output)) {
     throw std::runtime_error("Cannot craete directory.");
   }
 }
