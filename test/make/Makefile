@@ -7,7 +7,7 @@ OUT = out
 
 .PHONY: all clean
 
-all : main
+all : $(OUT)/main
 
 $(OUT) :
 	mkdir -p $(OUT)
@@ -30,7 +30,7 @@ $(OUT)/c.o : $(OUT) c.c c.h
 $(OUT)/main.o : $(OUT) main.c
 	$(CC) -c -o $(OUT)/main.o main.c
 
-main : $(OUT) $(OUT)/main.o $(OUT)/a.o $(OUT)/b.o $(OUT)/c.o $(OUT)/lib_a.o $(OUT)/lib_b.o
+$(OUT)/main : $(OUT) $(OUT)/main.o $(OUT)/a.o $(OUT)/b.o $(OUT)/c.o $(OUT)/lib_a.o $(OUT)/lib_b.o
 	$(CC) -o $(OUT)/main $(OUT)/main.o $(OUT)/a.o $(OUT)/b.o $(OUT)/c.o $(OUT)/lib_a.o $(OUT)/lib_b.o
 
 clean:

@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 import os
+import stat
 import subprocess
+import sys
 import time
 
 # Project directory.
@@ -40,12 +42,13 @@ subprocess.check_call(
 )
 
 # Run the build after touching each file.
-for idx, file in zip(range(len(tracked)), tracked):
-  time.sleep(1)
-
+for idx, file in zip(range(len(tracked)), tracked)[:2]:
   print '\n\nTouching ', idx, ' ', file
+
+  # Touch the file.
   os.utime(file, None)
 
+  # Run the incremental build.
   metaDir = os.path.join(tmpPath, 'out_{0}'.format(idx))
   subprocess.check_call(
     [
