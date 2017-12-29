@@ -28,30 +28,38 @@ static void sys_open(Trace *trace, const Args &args)
   const int fd = args.Return;
 
   if ((flags & O_WRONLY) || (flags & O_RDWR) || (flags & O_CREAT)) {
-    if (args.Return > 0) {
+    if (args.Return >= 0) {
       proc->AddOutput(path);
     }
   } else {
-    proc->AddInput(path);
+    if (args.Return >= 0) {
+      proc->AddInput(path);
+    }
   }
 }
 
 // -----------------------------------------------------------------------------
 static void sys_stat(Trace *trace, const Args &args)
 {
-  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
+  if (args.Return >= 0) {
+    trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
+  }
 }
 
 // -----------------------------------------------------------------------------
 static void sys_lstat(Trace *trace, const Args &args)
 {
-  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
+  if (args.Return >= 0) {
+    trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
+  }
 }
 
 // -----------------------------------------------------------------------------
 static void sys_access(Trace *trace, const Args &args)
 {
-  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
+  if (args.Return >= 0) {
+    trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -65,10 +73,20 @@ static void sys_chdir(Trace *trace, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_rename(Trace *trace, const Args &args)
 {
-  trace->GetTrace(args.PID)->Rename(
-      ReadString(args.PID, args[0]),
-      ReadString(args.PID, args[1])
-  );
+  if (args.Return >= 0) {
+    trace->GetTrace(args.PID)->Rename(
+        ReadString(args.PID, args[0]),
+        ReadString(args.PID, args[1])
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_mkdir(Trace *trace, const Args &args)
+{
+  if (args.Return >= 0) {
+     trace->GetTrace(args.PID)->AddOutput(ReadString(args.PID, args[0]));
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -82,7 +100,9 @@ static void sys_unlink(Trace *trace, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_readlink(Trace *trace, const Args &args)
 {
-  trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
+  if (args.Return >= 0) {
+    trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
+  }
 }
 
 
@@ -128,6 +148,7 @@ static const HandlerFn kHandlers[] =
   [SYS_getcwd         ] = sys_ignore,
   [SYS_chdir          ] = sys_chdir,
   [SYS_rename         ] = sys_rename,
+  [SYS_mkdir          ] = sys_mkdir,
   [SYS_unlink         ] = sys_unlink,
   [SYS_readlink       ] = sys_readlink,
   [SYS_chmod          ] = sys_ignore,
@@ -136,6 +157,7 @@ static const HandlerFn kHandlers[] =
   [SYS_getrlimit      ] = sys_ignore,
   [SYS_getrusage      ] = sys_ignore,
   [SYS_sigaltstack    ] = sys_ignore,
+  [SYS_statfs         ] = sys_ignore,
   [SYS_arch_prctl     ] = sys_ignore,
   [SYS_setrlimit      ] = sys_ignore,
   [SYS_futex          ] = sys_ignore,

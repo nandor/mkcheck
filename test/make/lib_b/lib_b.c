@@ -3,11 +3,9 @@
 // (C) 2017 Nandor Licker. All rights reserved.
 
 #include <stdio.h>
-#include "lib_b/lib_b.h"
-#include "a.h"
+#include "lib_b.h"
 
-void a()
+void lib_b()
 {
-  lib_b();
-  puts("A");
+  puts("LIB_B");
 }

@@ -191,6 +191,9 @@ int RunTracer(Trace *trace, pid_t pid)
   std::unordered_map<pid_t, std::shared_ptr<ProcessState>> tracked;
   tracked[pid] = std::make_shared<ProcessState>(pid);
 
+  // Candidate processses to be started.
+  std::unordered_map<pid_t, pid_t> candidates;
+
   // Keep tracking syscalls while any process in the hierarchy is running.
   int restart_sig = 0;
   while (!tracked.empty()) {
@@ -222,21 +225,35 @@ int RunTracer(Trace *trace, pid_t pid)
       case SIGTRAP: {
         // SIGTRAP is sent with an event number in certain scenarios.
         // Simply restart the process with signal number 0.
+        switch (status >> 16) {
+          case PTRACE_EVENT_FORK:
+          case PTRACE_EVENT_VFORK:
+          case PTRACE_EVENT_CLONE: {
+            // Get the ID of the child process.
+            pid_t child;
+            ptrace(PTRACE_GETEVENTMSG, pid, 0, &child);
+
+            // Start tracking it.
+            candidates[child] = pid;
+            restart_sig = 0;
+            break;
+          }
+          default: {
+            break;
+          }
+        }
         restart_sig = 0;
         continue;
       }
       case SIGSTOP: {
-        // Get the ID of the parent process.
-        pid_t parent;
-        ptrace(PTRACE_GETEVENTMSG, pid, 0, &parent);
-
         // Ignore the first SIGSTOP in each process since it is dispatched
         // after the new process is started, deliver it otherwise.
-        auto it = tracked.find(pid);
-        if (it == tracked.end()) {
-          tracked[pid] = std::make_shared<ProcessState>(pid);
-          trace->SpawnTrace(parent, pid);
+        auto it = candidates.find(pid);
+        if (it != candidates.end()) {
           restart_sig = 0;
+          tracked[pid] = std::make_shared<ProcessState>(pid);
+          trace->SpawnTrace(it->second, pid);
+          candidates.erase(it);
         } else {
           restart_sig = SIGSTOP;
         }

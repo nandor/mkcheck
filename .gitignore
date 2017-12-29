@@ -1,4 +1,5 @@
 build
 *.o
-test/make/main
-test/out
+test/make/out
+tmp
+graph

@@ -15,13 +15,13 @@
 // -----------------------------------------------------------------------------
 Process::~Process()
 {
-  if (inputs_.empty() && outputs_.empty()) {
+  if (isCOW_) {
     return;
   }
 
   std::ofstream os((trace_->GetOutput() / std::to_string(uid_)).string());
 
-  os << uid_ << " " << image_ << std::endl;
+  os << uid_ << " " << parent_ << " " << image_ << std::endl;
 
   for (const auto output : outputs_) {
     os << output << " ";
@@ -100,6 +100,7 @@ void Trace::SpawnTrace(pid_t parent, pid_t pid)
 {
   // Find the working directory.
   fs::path cwd;
+  uint64_t parentUID;
   uint64_t image;
   {
     auto it = procs_.find(parent);
@@ -108,18 +109,20 @@ void Trace::SpawnTrace(pid_t parent, pid_t pid)
       getcwd(buffer, PATH_MAX);
       cwd = buffer;
       image = 0;
+      parentUID = 0;
     } else {
       auto proc = it->second;
       cwd = proc->GetCwd();
       image = proc->GetImage();
+      parentUID = proc->GetUID();
     }
   }
 
   // Create the COW trace.
   procs_.emplace(pid, std::make_shared<Process>(
       this,
-      parent,
       pid,
+      parentUID,
       nextUID_++,
       image,
       cwd,
@@ -138,8 +141,8 @@ void Trace::StartTrace(pid_t pid, const fs::path &image)
   // Replace with a non-COW trace which has a new image.
   it->second = std::make_shared<Process>(
       this,
-      proc->GetParent(),
       pid,
+      proc->GetParent(),
       nextUID_++,
       Find(image),
       proc->GetCwd(),
@@ -150,7 +153,6 @@ void Trace::StartTrace(pid_t pid, const fs::path &image)
 // -----------------------------------------------------------------------------
 void Trace::EndTrace(pid_t pid)
 {
-  procs_.erase(pid);
 }
 
 // -----------------------------------------------------------------------------
@@ -164,7 +166,7 @@ Process *Trace::GetTrace(pid_t pid)
 // -----------------------------------------------------------------------------
 void Trace::Unlink(const fs::path &path)
 {
-  throw std::runtime_error("Not implemented.");
+  fileIDs_.erase(path.string());
 }
 
 // -----------------------------------------------------------------------------

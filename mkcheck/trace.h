@@ -26,15 +26,15 @@ public:
   /// Creates a new trace with a given image.
   Process(
       Trace *trace,
-      pid_t parent,
       pid_t pid,
+      uint64_t parent,
       uint64_t uid,
       uint64_t image,
       const fs::path &cwd,
       bool isCOW)
     : trace_(trace)
-    , parent_(parent)
     , pid_(pid)
+    , parent_(parent)
     , uid_(uid)
     , image_(image)
     , cwd_(cwd)
@@ -45,8 +45,10 @@ public:
   /// Destroys the process & writes data to a file.
   ~Process();
 
-  /// Returns the parent.
-  pid_t GetParent() const { return parent_; }
+  /// Returns the parent UID.
+  uint64_t GetParent() const { return parent_; }
+  /// Returns the process UID.
+  uint64_t GetUID() const { return uid_; }
   /// Returns the name of the image.
   uint64_t GetImage() const { return image_; }
   /// Returns the working directory.
@@ -70,10 +72,10 @@ private:
 private:
   /// Pointer to the trace.
   Trace *trace_;
-  /// Parent identifier.
-  const pid_t parent_;
   /// Process identifier.
   const pid_t pid_;
+  /// Parent identifier.
+  const uint64_t parent_;
   /// Unique instance identifier.
   const uint64_t uid_;
   /// Name of the image.
