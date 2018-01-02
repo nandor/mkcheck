@@ -4,3 +4,4 @@ test/make/out
 test/out
 tmp
 graph
+*.pyc
