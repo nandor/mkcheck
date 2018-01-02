@@ -6,11 +6,15 @@ import subprocess
 import sys
 import time
 
+from graph import parse_graph
+from parser import find_outputs
+
 # Project directory.
 project = '/home/nand/Projects/mkcheck'
 toolPath = os.path.join(project, 'build/mkcheck')
 rootPath = os.path.join(project, 'test/make')
 tmpPath = os.path.join(project, 'tmp')
+graphPath = os.path.join(tmpPath, 'out_clean')
 
 # Run a clean build.
 subprocess.check_call(
@@ -35,14 +39,16 @@ for entry in tracked:
 subprocess.check_call(
   [
     toolPath,
-    "--output={0}".format(os.path.join(tmpPath, 'out_clean')),
+    "--output={0}".format(graphPath),
     "make"
   ],
   cwd=rootPath
 )
 
+graph = parse_graph(rootPath, graphPath)
+
 # Run the build after touching each file.
-for idx, file in zip(range(len(tracked)), tracked)[:2]:
+for idx, file in zip(range(len(tracked)), tracked):
   print '\n\nTouching ', idx, ' ', file
 
   # Touch the file.
@@ -59,7 +65,10 @@ for idx, file in zip(range(len(tracked)), tracked)[:2]:
     cwd=rootPath
   )
 
+  deps = graph.find_deps(file[len(rootPath) + 1:])
+  outs = find_outputs(rootPath, metaDir)
+  if deps != outs:
+      print 'Mismatch ', deps, outs
+
   with open(os.path.join(metaDir, 'file'), 'w') as out:
     out.write(file)
-
-
