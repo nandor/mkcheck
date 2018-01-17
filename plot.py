@@ -12,7 +12,7 @@ def process(lines):
   ]
 
 g = Digraph(comment='Build Graph')
-g.attr(rankdir='LR')
+g.attr(rankdir='LR', ranksep='2')
 
 PREFIX = '/home/nand/Projects/mkcheck/test/make'
 PATH = sys.argv[1]
@@ -38,26 +38,31 @@ for proc in procs:
   with open(os.path.join(PATH, str(proc)), 'r') as f:
     [uid, parent, image], outputs, inputs = process(f.readlines())
 
-    if image != 0:
-      g.node('p' + str(uid), str(uid) + ': ' + names[image][0], color='red')
-    else:
-      g.node('p' + str(uid), str(uid), color='red')
+    g.node('p' + str(uid), str(uid) + ': ' + names[image][0], color='red')
 
     if len(outputs) > 0:
       for f in inputs:
         if f in known_files:
-          g.edge('f' + str(f), 'p' + str(uid))
+          g.edge('f' + known_files[f], 'p' + str(uid))
           rendered.add(f)
 
       for f in outputs:
         if f in known_files:
-          g.edge('p' + str(uid), 'f' + str(f))
+          g.edge('p' + str(uid), 'f' + known_files[f])
           rendered.add(f)
 
     if parent != 0:
       g.edge('p' + str(parent), 'p' + str(uid), color='red')
 
 for fid in rendered:
-  g.node('f' + str(fid), str(fid) + ': ' + known_files[fid])
+  g.node('f' + known_files[fid], known_files[fid])
+
+with open(os.path.join('tmp/make')) as f:
+  for node in f.readlines():
+    out, ins = [w.strip() for w in node.split(':')]
+    g.node('m' + out, out, color='blue')
+    g.edge('m' + out, 'f' + out, color='blue')
+    for i in [i.strip() for i in ins.split(',') if i.strip() != '']:
+      g.edge('f' + i, 'm' + out, color='blue')
 
 g.render('graph/test', view=False)
