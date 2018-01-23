@@ -15,6 +15,7 @@ import qualified Data.Text.IO as Text
 
 import Makefile
 
+import Debug.Trace
 
 
 
@@ -41,17 +42,21 @@ skipComments = do
     _ ->
       return ()
 
+takeLineTill :: (Char -> Bool) -> Parser Text
+takeLineTill cond
+  = Atto.takeTill (\ch -> ch == '\n' || cond ch)
+
 
 assignment :: Parser Entry
-assignment = try $ do
-  name <- Text.unpack . Text.strip <$> Atto.takeTill (== '=')
+assignment = Atto.try $ do
+  name <- Text.unpack . Text.strip <$> takeLineTill (== '=')
   Atto.char '='
   value <- Text.unpack . Text.strip <$> Atto.takeTill (== '\n')
   return $ Assignment name value
 
 
 rule :: Parser Entry
-rule = try $ do
+rule = Atto.try $ do
   output <- Atto.takeWhile (\ch -> not (isSpace ch) && ch /= ':')
   Atto.skipWhile isSpace
   char ':'

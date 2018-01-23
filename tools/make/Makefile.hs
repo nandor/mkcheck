@@ -52,7 +52,7 @@ expand Makefile{ mkRules } =
           (key, ')' : rest) ->
             case Map.lookup key vars of
               Nothing ->
-                Left "No such variable"
+                replace rest >>= Right
               Just val ->
                 replace rest >>= \chs -> Right (val ++ chs)
           _ ->
