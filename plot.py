@@ -14,8 +14,8 @@ def process(lines):
 g = Digraph(comment='Build Graph')
 g.attr(rankdir='LR', ranksep='2')
 
-PREFIX = '/home/nand/Projects/mkcheck/test/make'
 PATH = sys.argv[1]
+PREFIX = os.path.expanduser('~')
 
 names = {}
 known_files = {}

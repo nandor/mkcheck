@@ -58,12 +58,19 @@ public:
   void AddInput(const fs::path &path);
   /// Adds an output file to a process.
   void AddOutput(const fs::path &path);
+  /// Adds a destination path as an input.
+  void AddDestination(const fs::path &path);
   /// Sets the working directory.
   void SetCwd(const fs::path &cwd) { cwd_ = cwd; }
-  /// Unlinks a file.
-  void Unlink(const fs::path &path);
+  /// Unlinks a file or directory.
+  void Remove(const fs::path &path);
   /// Renames a file.
   void Rename(const fs::path &from, const fs::path &to);
+
+  /// Maps a file descriptor to a path.
+  void MapFd(int fd, const fs::path &path);
+  /// Returns the path to a file opened by a descriptor.
+  fs::path GetFd(int fd);
 
 private:
   /// Resolves a file to a unique identifier.
@@ -85,7 +92,7 @@ private:
   /// If image is copy-on-write.
   bool isCOW_;
   /// Open files.
-  std::unordered_map<int64_t, std::string> files_;
+  std::unordered_map<int, fs::path> files_;
   /// Input files.
   std::set<uint64_t> inputs_;
   /// Output files.
@@ -126,6 +133,8 @@ public:
   void Rename(const fs::path &from, const fs::path &to);
   /// Finds a file.
   uint64_t Find(const fs::path &path);
+  /// Returns the name of a file.
+  std::string GetFileName(uint64_t fid) const;
 
 private:
   /// Output directory.

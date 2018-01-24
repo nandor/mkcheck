@@ -20,7 +20,6 @@ Process::~Process()
   }
 
   std::ofstream os((trace_->GetOutput() / std::to_string(uid_)).string());
-
   os << uid_ << " " << parent_ << " " << image_ << std::endl;
 
   for (const auto output : outputs_) {
@@ -45,11 +44,22 @@ void Process::AddInput(const fs::path &path)
 // -----------------------------------------------------------------------------
 void Process::AddOutput(const fs::path &path)
 {
-  outputs_.insert(trace_->Find(Normalise(path)));
+  const auto &fullPath = Normalise(path);
+  outputs_.insert(trace_->Find(fullPath));
+  AddDestination(fullPath);
 }
 
 // -----------------------------------------------------------------------------
-void Process::Unlink(const fs::path &path)
+void Process::AddDestination(const fs::path &path)
+{
+  uint64_t parent = trace_->Find(path.parent_path());
+  if (outputs_.find(parent) == outputs_.end()) {
+    inputs_.insert(parent);
+  }
+}
+
+// -----------------------------------------------------------------------------
+void Process::Remove(const fs::path &path)
 {
   trace_->Unlink(Normalise(path));
 }
@@ -58,6 +68,19 @@ void Process::Unlink(const fs::path &path)
 void Process::Rename(const fs::path &from, const fs::path &to)
 {
   trace_->Rename(Normalise(from), Normalise(to));
+  AddDestination(to);
+}
+
+// -----------------------------------------------------------------------------
+void Process::MapFd(int fd, const fs::path &path)
+{
+  files_[fd] = path;
+}
+
+// -----------------------------------------------------------------------------
+fs::path Process::GetFd(int fd)
+{
+  return files_[fd];
 }
 
 // -----------------------------------------------------------------------------
@@ -70,7 +93,7 @@ fs::path Process::Normalise(const fs::path &path)
 
 // -----------------------------------------------------------------------------
 Trace::Trace(const fs::path &output)
-  : output_(output)
+  : output_(fs::absolute(output).normalize())
   , nextUID_(1)
   , nextFID_(1)
 {
@@ -191,4 +214,12 @@ uint64_t Trace::Find(const fs::path &path)
   } else {
     return it->second;
   }
+}
+
+// -----------------------------------------------------------------------------
+std::string Trace::GetFileName(uint64_t fid) const
+{
+  auto it = fileNames_.find(fid);
+  assert(it != fileNames_.end());
+  return *it->second.rbegin();
 }

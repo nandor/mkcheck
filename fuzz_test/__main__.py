@@ -14,7 +14,8 @@ from proc import run_proc
 scriptPath = os.path.dirname(os.path.abspath(__file__))
 projectPath = os.path.abspath(os.path.join(scriptPath, os.pardir))
 toolPath = os.path.join(projectPath, 'build/mkcheck')
-rootPath = os.getcwd()
+sourcePath = os.path.abspath(sys.argv[1])
+buildPath = os.getcwd()
 
 # TODO: make this an actual temporary folder
 tmpPath = os.path.join(projectPath, 'tmp')
@@ -23,13 +24,15 @@ tmpPath = os.path.join(projectPath, 'tmp')
 run_proc([ "ninja" ], cwd=os.path.join(projectPath, 'build'))
 
 # Run a clean build.
-run_proc([ "make", "clean" ], cwd=rootPath)
+run_proc([ "make", "clean" ], cwd=buildPath)
 
 # Find the initial timestamps of the tracked files.
 tracked = set()
-for dirName, subdirList, fileList in os.walk(rootPath, topdown=False):
-  for fileName in fileList:
-    tracked.add(os.path.join(dirName, fileName))
+for dirName, dirList, fileList in os.walk(sourcePath, topdown=False):
+    for fileName in fileList:
+        filePath = os.path.join(dirName, fileName)
+        if all(not p.startswith('.') for p in filePath.split(os.sep)):
+            tracked.add(filePath)
 
 timestamps = {}
 for entry in tracked:
@@ -43,10 +46,10 @@ run_proc(
     "--output={0}".format(graphPath),
     "make"
   ],
-  cwd=rootPath
+  cwd=buildPath
 )
 
-graph = parse_graph(rootPath, graphPath)
+graph = parse_graph(buildPath, graphPath)
 
 # Run the build after touching each file.
 for idx, file in zip(range(len(tracked)), tracked):
@@ -62,11 +65,11 @@ for idx, file in zip(range(len(tracked)), tracked):
       "--output={0}".format(metaDir),
       "make"
     ],
-    cwd=rootPath
+    cwd=buildPath
     )
 
-    deps = graph.find_deps(file[len(rootPath) + 1:])
-    outs = find_outputs(rootPath, metaDir)
+    deps = graph.find_deps(file[len(buildPath) + 1:])
+    outs = find_outputs(buildPath, metaDir)
     if deps != outs:
         print '%s:' % file
         for dep in deps:

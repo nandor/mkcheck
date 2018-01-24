@@ -301,7 +301,7 @@ int RunTracer(Trace *trace, pid_t pid)
     }
   }
 
-  return 0;
+  return EXIT_SUCCESS;
 }
 
 // -----------------------------------------------------------------------------
@@ -320,7 +320,7 @@ int main(int argc, char **argv)
   {
     int c = 0, idx = 0;
     while (c >= 0) {
-      switch (c = getopt_long(argc, argv, "", kOptions, &idx)) {
+      switch (c = getopt_long(argc, argv, "o:", kOptions, &idx)) {
         case -1: {
           break;
         }
@@ -363,7 +363,13 @@ int main(int argc, char **argv)
       return RunChild(exec, args);
     }
     default: {
-      return RunTracer(trace.get(), pid);
+      try {
+        return RunTracer(trace.get(), pid);
+      } catch (const std::exception &ex) {
+        kill(pid, SIGKILL);
+        std::cerr << "[Exception] " << ex.what() << std::endl;
+        return EXIT_FAILURE;
+      }
     }
   }
 
