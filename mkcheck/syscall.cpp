@@ -146,6 +146,27 @@ static void sys_readlink(Trace *trace, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_unlinkat(Trace *trace, const Args &args)
+{
+  const int fd = args[0];
+  auto proc = trace->GetTrace(args.PID);
+  const fs::path path = ReadString(args.PID, args[1]);
+
+  if (args.Return >= 0) {
+    if (path.is_relative()) {
+      if (fd == AT_FDCWD) {
+        proc->Remove((proc->GetCwd() / path).normalize());
+      } else {
+        throw std::runtime_error("Not implemented: unlinkat");
+      }
+    } else {
+      proc->Remove(path);
+    }
+  }
+
+}
+
+// -----------------------------------------------------------------------------
 static void sys_openat(Trace *trace, const Args &args)
 {
   const int fd = args[0];
@@ -245,6 +266,7 @@ static const HandlerFn kHandlers[] =
   /* 0x059 */ [SYS_readlink          ] = sys_readlink,
   /* 0x05A */ [SYS_chmod             ] = sys_ignore,
   /* 0x05F */ [SYS_umask             ] = sys_ignore,
+  /* 0x060 */ [SYS_gettimeofday      ] = sys_ignore,
   /* 0x061 */ [SYS_getrlimit         ] = sys_ignore,
   /* 0x062 */ [SYS_getrusage         ] = sys_ignore,
   /* 0x063 */ [SYS_sysinfo           ] = sys_ignore,
@@ -253,6 +275,7 @@ static const HandlerFn kHandlers[] =
   /* 0x06B */ [SYS_geteuid           ] = sys_ignore,
   /* 0x06C */ [SYS_getegid           ] = sys_ignore,
   /* 0x06E */ [SYS_getppid           ] = sys_ignore,
+  /* 0x06F */ [SYS_getpgrp           ] = sys_ignore,
   /* 0x083 */ [SYS_sigaltstack       ] = sys_ignore,
   /* 0x089 */ [SYS_statfs            ] = sys_ignore,
   /* 0x09D */ [SYS_prctl             ] = sys_ignore,
@@ -268,6 +291,7 @@ static const HandlerFn kHandlers[] =
   /* 0x0E7 */ [SYS_exit_group        ] = sys_ignore,
   /* 0x101 */ [SYS_openat            ] = sys_openat,
   /* 0x106 */ [SYS_newfstatat        ] = sys_ignore,
+  /* 0x107 */ [SYS_unlinkat          ] = sys_unlinkat,
   /* 0x10D */ [SYS_faccessat         ] = sys_faccessat,
   /* 0x111 */ [SYS_set_robust_list   ] = sys_ignore,
   /* 0x118 */ [SYS_utimensat         ] = sys_ignore,

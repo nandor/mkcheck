@@ -7,6 +7,7 @@
 #include <cassert>
 #include <climits>
 #include <iostream>
+#include <fstream>
 
 #include <unistd.h>
 
