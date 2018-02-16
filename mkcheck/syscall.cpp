@@ -38,6 +38,12 @@ static void sys_open(Trace *trace, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_close(Trace *trace, const Args &args)
+{
+
+}
+
+// -----------------------------------------------------------------------------
 static void sys_stat(Trace *trace, const Args &args)
 {
   if (args.Return >= 0) {
@@ -134,7 +140,7 @@ static void sys_unlink(Trace *trace, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_symlink(Trace *trace, const Args &args)
 {
-  //abort();
+  // TODO
 }
 
 // -----------------------------------------------------------------------------
@@ -143,6 +149,18 @@ static void sys_readlink(Trace *trace, const Args &args)
   if (args.Return >= 0) {
     trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
   }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_chmod(Trace *trace, const Args &args)
+{
+  // TODO
+}
+
+// -----------------------------------------------------------------------------
+static void sys_chown(Trace *trace, const Args &args)
+{
+  // TODO
 }
 
 // -----------------------------------------------------------------------------
@@ -163,11 +181,40 @@ static void sys_unlinkat(Trace *trace, const Args &args)
       proc->Remove(path);
     }
   }
-
 }
 
 // -----------------------------------------------------------------------------
 static void sys_openat(Trace *trace, const Args &args)
+{
+  const int fd = args[0];
+  const fs::path path = ReadString(args.PID, args[1]);
+  const uint64_t flags = args[2];
+  auto proc = trace->GetTrace(args.PID);
+
+  if (args.Return >= 0) {
+    fs::path fullPath;
+
+    if (path.is_relative()) {
+      if (fd == AT_FDCWD) {
+        fullPath = (proc->GetCwd() / path).normalize();
+      } else {
+        throw std::runtime_error("Not implemented: faccessat");
+      }
+    } else {
+      fullPath = path;
+    }
+
+    proc->MapFd(fd, path);
+    if ((flags & O_WRONLY) || (flags & O_RDWR) || (flags & O_CREAT)) {
+      proc->AddOutput(fullPath);
+    } else {
+      proc->AddInput(fullPath);
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_faccessat(Trace *trace, const Args &args)
 {
   const int fd = args[0];
   auto proc = trace->GetTrace(args.PID);
@@ -176,25 +223,10 @@ static void sys_openat(Trace *trace, const Args &args)
   if (args.Return >= 0) {
     if (path.is_relative()) {
       if (fd == AT_FDCWD) {
-        proc->MapFd(fd, (proc->GetCwd() / path).normalize());
+          proc->AddInput((proc->GetCwd() / path).normalize());
       } else {
-        throw std::runtime_error("Not implemented: openat");
+        throw std::runtime_error("Not implemented: faccessat");
       }
-    } else {
-      proc->MapFd(args[0], path);
-    }
-  }
-}
-
-// -----------------------------------------------------------------------------
-static void sys_faccessat(Trace *trace, const Args &args)
-{
-  auto proc = trace->GetTrace(args.PID);
-  const fs::path path = ReadString(args.PID, args[1]);
-
-  if (args.Return >= 0) {
-    if (path.is_relative()) {
-      throw std::runtime_error("Not implemented: faccessat");
     } else {
       proc->AddInput(path);
     }
@@ -213,10 +245,11 @@ static const HandlerFn kHandlers[] =
   /* 0x000 */ [SYS_read              ] = sys_ignore,
   /* 0x001 */ [SYS_write             ] = sys_ignore,
   /* 0x002 */ [SYS_open              ] = sys_open,
-  /* 0x003 */ [SYS_close             ] = sys_ignore,
+  /* 0x003 */ [SYS_close             ] = sys_close,
   /* 0x004 */ [SYS_stat              ] = sys_stat,
   /* 0x005 */ [SYS_fstat             ] = sys_ignore,
   /* 0x006 */ [SYS_lstat             ] = sys_lstat,
+  /* 0x007 */ [SYS_poll              ] = sys_ignore,
   /* 0x008 */ [SYS_lseek             ] = sys_ignore,
   /* 0x009 */ [SYS_mmap              ] = sys_ignore,
   /* 0x00A */ [SYS_mprotect          ] = sys_ignore,
@@ -264,7 +297,8 @@ static const HandlerFn kHandlers[] =
   /* 0x057 */ [SYS_unlink            ] = sys_unlink,
   /* 0x058 */ [SYS_symlink           ] = sys_symlink,
   /* 0x059 */ [SYS_readlink          ] = sys_readlink,
-  /* 0x05A */ [SYS_chmod             ] = sys_ignore,
+  /* 0x05A */ [SYS_chmod             ] = sys_chmod,
+  /* 0x05C */ [SYS_chown             ] = sys_chown,
   /* 0x05F */ [SYS_umask             ] = sys_ignore,
   /* 0x060 */ [SYS_gettimeofday      ] = sys_ignore,
   /* 0x061 */ [SYS_getrlimit         ] = sys_ignore,
@@ -276,8 +310,10 @@ static const HandlerFn kHandlers[] =
   /* 0x06C */ [SYS_getegid           ] = sys_ignore,
   /* 0x06E */ [SYS_getppid           ] = sys_ignore,
   /* 0x06F */ [SYS_getpgrp           ] = sys_ignore,
+  /* 0x073 */ [SYS_getgroups         ] = sys_ignore,
   /* 0x083 */ [SYS_sigaltstack       ] = sys_ignore,
   /* 0x089 */ [SYS_statfs            ] = sys_ignore,
+  /* 0x08A */ [SYS_fstatfs           ] = sys_ignore,
   /* 0x09D */ [SYS_prctl             ] = sys_ignore,
   /* 0x09E */ [SYS_arch_prctl        ] = sys_ignore,
   /* 0x0A0 */ [SYS_setrlimit         ] = sys_ignore,
@@ -287,6 +323,7 @@ static const HandlerFn kHandlers[] =
   /* 0x0CB */ [SYS_sched_setaffinity ] = sys_ignore,
   /* 0x0CC */ [SYS_sched_getaffinity ] = sys_ignore,
   /* 0x0DA */ [SYS_set_tid_address   ] = sys_ignore,
+  /* 0x0DD */ [SYS_fadvise64         ] = sys_ignore,
   /* 0x0E5 */ [SYS_clock_getres      ] = sys_ignore,
   /* 0x0E7 */ [SYS_exit_group        ] = sys_ignore,
   /* 0x101 */ [SYS_openat            ] = sys_openat,
@@ -304,10 +341,10 @@ static const HandlerFn kHandlers[] =
 // -----------------------------------------------------------------------------
 void Handle(Trace *trace, int64_t sno, const Args &args)
 {
+  // TODO: add working directory to inputs
   if (sno < 0) {
     return;
   }
-
   if (sno > sizeof(kHandlers) / sizeof(kHandlers[0]) || !kHandlers[sno]) {
     throw std::runtime_error(
         "Unknown syscall " + std::to_string(sno) + " in " +

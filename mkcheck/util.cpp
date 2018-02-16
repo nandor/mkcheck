@@ -4,6 +4,7 @@
 
 #include "util.h"
 
+#include <limits>
 #include <stdexcept>
 
 #include <sys/uio.h>
@@ -33,11 +34,17 @@ ssize_t ReadBuffer(pid_t pid, void *dst, uint64_t src, size_t len)
 // -----------------------------------------------------------------------------
 std::string ReadString(pid_t pid, uint64_t addr)
 {
+  return ReadString(pid, addr, std::numeric_limits<size_t>::max());
+}
+
+// -----------------------------------------------------------------------------
+std::string ReadString(pid_t pid, uint64_t addr, size_t len)
+{
   std::string result;
   char buffer[kPageSize];
   uint64_t read = 0;
 
-  for (;;) {
+  for (size_t i = 0; i < len; ++i) {
     const uint64_t end = (addr + kPageSize) & (kPageSize - 1);
     const uint64_t len = kPageSize - end;
 
@@ -56,4 +63,6 @@ std::string ReadString(pid_t pid, uint64_t addr)
     result.append(buffer, count);
     addr += count;
   }
+
+  return result;
 }

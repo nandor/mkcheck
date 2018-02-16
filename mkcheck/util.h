@@ -18,3 +18,8 @@ ssize_t ReadBuffer(pid_t pid, void *dst, uint64_t src, size_t len);
  * Reads a string from the child's address space.
  */
 std::string ReadString(pid_t pid, uint64_t addr);
+
+/**
+ * Reads a string, up to a given length.
+ */
+std::string ReadString(pid_t pid, uint64_t addr, size_t len);

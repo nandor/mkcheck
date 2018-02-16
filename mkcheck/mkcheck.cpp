@@ -271,7 +271,7 @@ int RunTracer(Trace *trace, pid_t pid)
     {
       auto it = tracked.find(pid);
       if (it == tracked.end()) {
-        throw std::runtime_error("Invalid PID.");
+        throw std::runtime_error("Invalid PID: " + std::to_string(pid));
       }
       state = it->second;
     }
