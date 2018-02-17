@@ -168,47 +168,28 @@ static void sys_unlinkat(Trace *trace, const Args &args)
 {
   const int fd = args[0];
   auto proc = trace->GetTrace(args.PID);
-  const fs::path path = ReadString(args.PID, args[1]);
+  const fs::path path = proc->Realpath(fd, ReadString(args.PID, args[1]));
 
   if (args.Return >= 0) {
-    if (path.is_relative()) {
-      if (fd == AT_FDCWD) {
-        proc->Remove((proc->GetCwd() / path).normalize());
-      } else {
-        throw std::runtime_error("Not implemented: unlinkat");
-      }
-    } else {
-      proc->Remove(path);
-    }
+    proc->Remove(path);
   }
 }
 
 // -----------------------------------------------------------------------------
 static void sys_openat(Trace *trace, const Args &args)
 {
-  const int fd = args[0];
-  const fs::path path = ReadString(args.PID, args[1]);
-  const uint64_t flags = args[2];
   auto proc = trace->GetTrace(args.PID);
 
+  const int fd = args[0];
+  const fs::path path = proc->Realpath(fd, ReadString(args.PID, args[1]));
+  const uint64_t flags = args[2];
+
   if (args.Return >= 0) {
-    fs::path fullPath;
-
-    if (path.is_relative()) {
-      if (fd == AT_FDCWD) {
-        fullPath = (proc->GetCwd() / path).normalize();
-      } else {
-        throw std::runtime_error("Not implemented: faccessat");
-      }
-    } else {
-      fullPath = path;
-    }
-
     proc->MapFd(fd, path);
     if ((flags & O_WRONLY) || (flags & O_RDWR) || (flags & O_CREAT)) {
-      proc->AddOutput(fullPath);
+      proc->AddOutput(path);
     } else {
-      proc->AddInput(fullPath);
+      proc->AddInput(path);
     }
   }
 }
@@ -218,18 +199,10 @@ static void sys_faccessat(Trace *trace, const Args &args)
 {
   const int fd = args[0];
   auto proc = trace->GetTrace(args.PID);
-  const fs::path path = ReadString(args.PID, args[1]);
+  const fs::path path = proc->Realpath(fd, ReadString(args.PID, args[1]));
 
   if (args.Return >= 0) {
-    if (path.is_relative()) {
-      if (fd == AT_FDCWD) {
-          proc->AddInput((proc->GetCwd() / path).normalize());
-      } else {
-        throw std::runtime_error("Not implemented: faccessat");
-      }
-    } else {
-      proc->AddInput(path);
-    }
+    proc->AddInput(path);
   }
 }
 

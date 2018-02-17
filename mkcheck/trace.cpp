@@ -10,6 +10,7 @@
 #include <fstream>
 
 #include <unistd.h>
+#include <fcntl.h>
 
 
 
@@ -34,6 +35,30 @@ Process::~Process()
     }
   }
   os << std::endl;
+}
+
+// -----------------------------------------------------------------------------
+fs::path Process::Realpath(const fs::path &path)
+{
+  if (path.is_relative()) {
+    return (cwd_ / path).normalize();
+  } else {
+    return path;
+  }
+}
+
+// -----------------------------------------------------------------------------
+fs::path Process::Realpath(int fd, const fs::path &path)
+{
+  if (path.is_relative()) {
+    if (fd == AT_FDCWD) {
+      return (cwd_ / path).normalize();
+    } else {
+      throw std::runtime_error("Not implemented: realpath");
+    }
+  } else {
+    return path;
+  }
 }
 
 // -----------------------------------------------------------------------------

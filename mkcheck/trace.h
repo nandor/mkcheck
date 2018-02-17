@@ -54,6 +54,10 @@ public:
   /// Returns the working directory.
   fs::path GetCwd() const { return cwd_; }
 
+  /// Resolves a path, relative to the cwd.
+  fs::path Realpath(const fs::path &path);
+  /// Resolves a path, relative to any directory.
+  fs::path Realpath(int fd, const fs::path &path);
   /// Adds an input file to a process.
   void AddInput(const fs::path &path);
   /// Adds an output file to a process.
