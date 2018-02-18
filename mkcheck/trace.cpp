@@ -75,7 +75,7 @@ fs::path Process::Normalise(int fd, const fs::path &path)
   fs::path fullPath;
   if (path.is_relative()) {
     if (fd == AT_FDCWD) {
-      fullPath = cwd_ / path;
+      fullPath = (cwd_ / path).normalize();
     } else {
       throw std::runtime_error("Not implemented: realpath");
     }
@@ -84,7 +84,7 @@ fs::path Process::Normalise(int fd, const fs::path &path)
   }
 
   // If the file exists, return the canonical path.
-  const fs::path canonical = fs::canonical(path, ec);
+  const fs::path canonical = fs::canonical(fullPath, ec);
   if (!ec) {
     return canonical;
   }
@@ -98,7 +98,8 @@ fs::path Process::Normalise(int fd, const fs::path &path)
     return canonicalParent / file;
   }
 
-  return path;
+  std::cerr << fullPath << "\n";
+  return fullPath;
 }
 
 // -----------------------------------------------------------------------------

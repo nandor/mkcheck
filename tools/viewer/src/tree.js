@@ -21,10 +21,13 @@ export default class Tree {
   }
 
   static build(data) {
-    const files = data.map((file) => ({
-      path: file.name.split('/').splice(1),
-      file: file
-    })).sort();
+    const files = data
+      .map((file) => ({
+        path: file.name.split('/').splice(1),
+        file: file
+      }))
+      .filter(file => file.file.name != '/')
+      .sort();
 
     const byID = {};
 
