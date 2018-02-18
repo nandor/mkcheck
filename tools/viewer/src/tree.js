@@ -15,6 +15,11 @@ export default class Tree {
     this.children = children;
   }
 
+  fileName() {
+    const tokens = this.name.split('/');
+    return tokens[tokens.length - 1] || '/';
+  }
+
   static build(data) {
     const files = data.map((file) => ({
       path: file.name.split('/').splice(1),
@@ -36,8 +41,9 @@ export default class Tree {
         }
       });
 
-      const children = {};
+      let children = null;
       for (const key of Object.keys(byToken)) {
+        children = children || {};
         children[key] = buildNode(byToken[key], name + '/' + key, depth + 1);
       }
 
@@ -45,7 +51,7 @@ export default class Tree {
       const deps = current ? current.deps : [];
       const id = current ? current.id : 0;
 
-      const node = new Tree(id, name, deleted, deps, children);
+      const node = new Tree(id, name || '/', deleted, deps, children);
       if (id != 0) {
         byID[id] = node;
       }

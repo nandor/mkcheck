@@ -4,5 +4,16 @@
  */
 
 .tree-view {
-  border: 1px solid black;
+}
+
+.tree-view-title {
+  cursor: pointer;
+}
+
+.tree-view-title .deleted {
+  color: red;
+}
+
+.tree-view-children {
+  margin-left: 10px;
 }
