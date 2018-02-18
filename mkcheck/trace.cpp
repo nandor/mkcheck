@@ -14,6 +14,28 @@
 #include <sys/stat.h>
 
 
+// -----------------------------------------------------------------------------
+Process::Process(
+    Trace *trace,
+    pid_t pid,
+    uint64_t parent,
+    uint64_t uid,
+    uint64_t image,
+    const FDSet &fdSet,
+    const fs::path &cwd,
+    bool isCOW)
+  : trace_(trace)
+  , pid_(pid)
+  , parent_(parent)
+  , uid_(uid)
+  , image_(image)
+  , cwd_(cwd)
+  , isCOW_(isCOW)
+{
+  for (const auto &fd : fdSet) {
+    files_.emplace(fd.Fd, fd);
+  }
+}
 
 // -----------------------------------------------------------------------------
 Process::~Process()
@@ -125,16 +147,96 @@ void Process::Symlink(const fs::path &target, const fs::path &linkpath)
 // -----------------------------------------------------------------------------
 void Process::MapFd(int fd, const fs::path &path)
 {
-  files_[fd] = path;
+  FDInfo info(fd, path, false);
+
+  auto it = files_.find(fd);
+  if (it == files_.end()) {
+    files_.emplace(fd, info);
+  } else {
+    it->second = info;
+  }
 }
 
 // -----------------------------------------------------------------------------
 fs::path Process::GetFd(int fd)
 {
-  return files_[fd];
+  auto it = files_.find(fd);
+  if (it == files_.end()) {
+    throw std::runtime_error(
+        "Unknown file descriptor: " + std::to_string(fd)
+    );
+  }
+  return it->second.Path;
 }
 
+// -----------------------------------------------------------------------------
+void Process::DupFd(int from, int to)
+{
+  auto it = files_.find(from);
+  if (it == files_.end()) {
+    throw std::runtime_error(
+        "Unknown file descriptor: " + std::to_string(from)
+    );
+  }
 
+  FDInfo info(to, it->second.Path, false);
+
+  auto jt = files_.find(to);
+  if (jt == files_.end()) {
+    files_.emplace(to, info);
+  } else {
+    jt->second = info;
+  }
+}
+
+// -----------------------------------------------------------------------------
+void Process::SetCloseExec(int fd)
+{
+  auto it = files_.find(fd);
+  if (it == files_.end()) {
+    throw std::runtime_error(
+        "Unknown file descriptor: " + std::to_string(fd)
+    );
+  }
+
+  it->second.CloseExec = true;
+}
+
+// -----------------------------------------------------------------------------
+void Process::ClearCloseExec(int fd)
+{
+  auto it = files_.find(fd);
+  if (it == files_.end()) {
+    throw std::runtime_error(
+        "Unknown file descriptor: " + std::to_string(fd)
+    );
+  }
+
+  it->second.CloseExec = false;
+}
+
+// -----------------------------------------------------------------------------
+FDSet Process::GetAllFDs()
+{
+  FDSet fdSet;
+  for (const auto &file : files_) {
+    fdSet.emplace_back(file.second);
+  }
+  return fdSet;
+}
+
+// -----------------------------------------------------------------------------
+FDSet Process::GetInheritedFDs()
+{
+  FDSet fdSet;
+  for (auto &file : files_) {
+    const auto info = file.second;
+    if (!info.CloseExec) {
+      fdSet.emplace_back(info);
+    }
+  }
+  return fdSet;
+}
 
 // -----------------------------------------------------------------------------
 Trace::Trace(const fs::path &output)
@@ -211,6 +313,7 @@ void Trace::SpawnTrace(pid_t parent, pid_t pid)
   fs::path cwd;
   uint64_t parentUID;
   uint64_t image;
+  FDSet fdSet;
   {
     auto it = procs_.find(parent);
     if (it == procs_.end()) {
@@ -219,11 +322,16 @@ void Trace::SpawnTrace(pid_t parent, pid_t pid)
       cwd = buffer;
       image = 0;
       parentUID = 0;
+
+      fdSet.emplace_back(0, "/dev/stdin", false);
+      fdSet.emplace_back(1, "/dev/stdout", false);
+      fdSet.emplace_back(2, "/dev/stderr", false);
     } else {
       auto proc = it->second;
       cwd = proc->GetCwd();
       image = proc->GetImage();
       parentUID = proc->GetUID();
+      fdSet = proc->GetAllFDs();
     }
   }
 
@@ -234,6 +342,7 @@ void Trace::SpawnTrace(pid_t parent, pid_t pid)
       parentUID,
       nextUID_++,
       image,
+      fdSet,
       cwd,
       true
   ));
@@ -254,6 +363,7 @@ void Trace::StartTrace(pid_t pid, const fs::path &image)
       proc->GetParent(),
       nextUID_++,
       Find(image),
+      proc->GetInheritedFDs(),
       proc->GetCwd(),
       false
   );

@@ -19,6 +19,40 @@ class Trace;
 
 
 /**
+ * File descriptor information.
+ */
+struct FDInfo {
+  /// Descriptor number.
+  int Fd;
+  /// Path to file.
+  fs::path Path;
+  /// Close-On-Exec flag.
+  bool CloseExec;
+
+  /// Constructs a file descriptor info object.
+  FDInfo(int fd, bool closeExec)
+    : Fd(fd)
+    , CloseExec(closeExec)
+  {
+  }
+
+  /// Constructs a file descriptor info object.
+  FDInfo(int fd, const fs::path &path, bool closeExec)
+    : Fd(fd)
+    , Path(path)
+    , CloseExec(closeExec)
+  {
+  }
+};
+
+
+
+/**
+ * Map of inherited file descriptors.
+ */
+typedef std::vector<FDInfo> FDSet;
+
+/**
  * Process in a trace.
  */
 class Process final {
@@ -30,17 +64,9 @@ public:
       uint64_t parent,
       uint64_t uid,
       uint64_t image,
+      const FDSet &fdSet,
       const fs::path &cwd,
-      bool isCOW)
-    : trace_(trace)
-    , pid_(pid)
-    , parent_(parent)
-    , uid_(uid)
-    , image_(image)
-    , cwd_(cwd)
-    , isCOW_(isCOW)
-  {
-  }
+      bool isCOW);
 
   /// Destroys the process & writes data to a file.
   ~Process();
@@ -81,6 +107,18 @@ public:
   void MapFd(int fd, const fs::path &path);
   /// Returns the path to a file opened by a descriptor.
   fs::path GetFd(int fd);
+  /// Duplicates a file descriptor.
+  void DupFd(int from, int to);
+
+  /// Adds a file descriptor to the cloexec set.
+  void SetCloseExec(int fd);
+  /// Removes a file from the cloexec set.
+  void ClearCloseExec(int fd);
+
+  /// Returns all file descriptors.
+  FDSet GetAllFDs();
+  /// Returns the set of non-cloexec fds.
+  FDSet GetInheritedFDs();
 
 private:
   /// Pointer to the trace.
@@ -97,8 +135,9 @@ private:
   fs::path cwd_;
   /// If image is copy-on-write.
   bool isCOW_;
+
   /// Open files.
-  std::unordered_map<int, fs::path> files_;
+  std::unordered_map<int, FDInfo> files_;
   /// Input files.
   std::set<uint64_t> inputs_;
   /// Output files.

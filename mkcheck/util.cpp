@@ -50,7 +50,11 @@ std::string ReadString(pid_t pid, uint64_t addr, size_t len)
 
     ssize_t count = ReadBuffer(pid, buffer, addr, len);
     if (count < 0) {
-      throw std::runtime_error("Cannot read from child memory.");
+      throw std::runtime_error(
+          "Cannot read from child memory (errno = " +
+          std::to_string(errno) +
+          ")"
+      );
     }
 
     for (size_t i = 0; i < count; ++i) {

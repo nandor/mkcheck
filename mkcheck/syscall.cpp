@@ -28,10 +28,17 @@ static void sys_open(Process *proc, const Args &args)
 
   if (args.Return >= 0) {
     proc->MapFd(args.Return, path);
+
     if ((flags & O_WRONLY) || (flags & O_RDWR) || (flags & O_CREAT)) {
       proc->AddOutput(path);
     } else {
       proc->AddInput(path);
+    }
+
+    if (flags & O_CLOEXEC) {
+      proc->ClearCloseExec(fd);
+    } else {
+      proc->SetCloseExec(fd);
     }
   }
 }
@@ -65,7 +72,7 @@ static void sys_lstat(Process *proc, const Args &args)
 static void sys_dup(Process *proc, const Args &args)
 {
   if (args.Return >= 0) {
-    proc->MapFd(args.Return, proc->GetFd(args[0]));
+    proc->DupFd(args[0], args.Return);
   }
 }
 
@@ -73,7 +80,7 @@ static void sys_dup(Process *proc, const Args &args)
 static void sys_dup2(Process *proc, const Args &args)
 {
   if (args.Return >= 0) {
-    proc->MapFd(args.Return, proc->GetFd(args[0]));
+    proc->DupFd(args[0], args.Return);
   }
 }
 
@@ -84,6 +91,59 @@ static void sys_access(Process *proc, const Args &args)
 
   if (args.Return >= 0) {
     proc->AddInput(path);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_pipe(Process *proc, const Args &args)
+{
+  int fds[2];
+  ReadBuffer(args.PID, fds, args[0], 2 * sizeof(int));
+
+  if (args.Return >= 0) {
+    const fs::path path = "/proc/" + std::to_string(args.PID) + "/fd/";
+    proc->MapFd(fds[0], path / std::to_string(fds[0]));
+    proc->MapFd(fds[1], path / std::to_string(fds[1]));
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_fcntl(Process *proc, const Args &args)
+{
+  const int fd = args[0];
+  const int cmd = args[1];
+
+  if (args.Return >= 0) {
+    switch (cmd) {
+      case F_DUPFD: {
+        proc->DupFd(args[0], args.Return);
+        break;
+      }
+      case F_DUPFD_CLOEXEC: {
+        proc->DupFd(args[0], args.Return);
+        proc->SetCloseExec(args.Return);
+        break;
+      }
+      case F_SETFD: {
+        const int arg = args[2];
+        if (arg & O_CLOEXEC) {
+          proc->ClearCloseExec(fd);
+        } else {
+          proc->SetCloseExec(fd);
+        }
+        break;
+      }
+      case F_GETFD:
+      case F_GETFL:
+      case F_SETFL: {
+        break;
+      }
+      default: {
+        throw std::runtime_error(
+            "Unknown fnctl (cmd = " + std::to_string(cmd) + ")"
+        );
+      }
+    }
   }
 }
 
@@ -100,10 +160,9 @@ static void sys_chdir(Process *proc, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_fchdir(Process *proc, const Args &args)
 {
-  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
-
+  const int fd = args[0];
   if (args.Return >= 0) {
-    proc->SetCwd(path);
+    proc->SetCwd(proc->GetFd(fd));
   }
 }
 
@@ -182,16 +241,25 @@ static void sys_unlinkat(Process *proc, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_openat(Process *proc, const Args &args)
 {
-  const int fd = args[0];
-  const fs::path path = proc->Normalise(fd, ReadString(args.PID, args[1]));
+  const int dirfd = args[0];
+  const fs::path path = proc->Normalise(dirfd, ReadString(args.PID, args[1]));
   const uint64_t flags = args[2];
 
   if (args.Return >= 0) {
+    const int fd = args.Return;
+
     proc->MapFd(fd, path);
+
     if ((flags & O_WRONLY) || (flags & O_RDWR) || (flags & O_CREAT)) {
       proc->AddOutput(path);
     } else {
       proc->AddInput(path);
+    }
+
+    if (flags & O_CLOEXEC) {
+      proc->ClearCloseExec(fd);
+    } else {
+      proc->SetCloseExec(fd);
     }
   }
 }
@@ -205,6 +273,13 @@ static void sys_faccessat(Process *proc, const Args &args)
   if (args.Return >= 0) {
     proc->AddInput(path);
   }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_pipe2(Process *proc, const Args &args)
+{
+  // TODO: implment this
+  abort();
 }
 
 // -----------------------------------------------------------------------------
@@ -236,7 +311,7 @@ static const HandlerFn kHandlers[] =
   /* 0x011 */ [SYS_pread64           ] = sys_ignore,
   /* 0x013 */ [SYS_readv             ] = sys_ignore,
   /* 0x015 */ [SYS_access            ] = sys_access,
-  /* 0x016 */ [SYS_pipe              ] = sys_ignore,
+  /* 0x016 */ [SYS_pipe              ] = sys_pipe,
   /* 0x017 */ [SYS_select            ] = sys_ignore,
   /* 0x018 */ [SYS_sched_yield       ] = sys_ignore,
   /* 0x019 */ [SYS_mremap            ] = sys_ignore,
@@ -259,7 +334,7 @@ static const HandlerFn kHandlers[] =
   /* 0x03B */ [SYS_execve            ] = sys_ignore,
   /* 0x03D */ [SYS_wait4             ] = sys_ignore,
   /* 0x03F */ [SYS_uname             ] = sys_ignore,
-  /* 0x048 */ [SYS_fcntl             ] = sys_ignore,
+  /* 0x048 */ [SYS_fcntl             ] = sys_fcntl,
   /* 0x04D */ [SYS_ftruncate         ] = sys_ignore,
   /* 0x04E */ [SYS_getdents          ] = sys_ignore,
   /* 0x04F */ [SYS_getcwd            ] = sys_ignore,
@@ -308,7 +383,7 @@ static const HandlerFn kHandlers[] =
   /* 0x118 */ [SYS_utimensat         ] = sys_ignore,
   /* 0x122 */ [SYS_eventfd2          ] = sys_ignore,
   /* 0x123 */ [SYS_epoll_create1     ] = sys_ignore,
-  /* 0x125 */ [SYS_pipe2             ] = sys_ignore,
+  /* 0x125 */ [SYS_pipe2             ] = sys_pipe2,
   /* 0x12E */ [SYS_prlimit64         ] = sys_ignore,
 };
 
@@ -326,5 +401,15 @@ void Handle(Trace *trace, int64_t sno, const Args &args)
     );
   }
 
-  kHandlers[sno](trace->GetTrace(args.PID), args);
+  auto *proc = trace->GetTrace(args.PID);
+
+  try {
+    kHandlers[sno](proc, args);
+  } catch (std::exception &ex) {
+    throw std::runtime_error(
+        "Exception while handling syscall " + std::to_string(sno) +
+        " in process " + std::to_string(proc->GetUID()) + ": " +
+        ex.what()
+    );
+  }
 }
