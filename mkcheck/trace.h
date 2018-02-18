@@ -54,6 +54,9 @@ public:
   /// Returns the working directory.
   fs::path GetCwd() const { return cwd_; }
 
+  /// Checks if the process is Copy-On-Write.
+  bool IsCOW() const { return isCOW_; }
+
   /// Resolves a path, relative to the cwd.
   fs::path Normalise(const fs::path &path);
   /// Resolves a path, relative to any directory.
@@ -158,7 +161,7 @@ private:
     /// Flag indicating if this one exists by the end of the build.
     bool Deleted;
     /// List of other files this depends on.
-    std::vector<uint64_t> Dependencies;
+    std::vector<uint64_t> Deps;
 
     /// Constructs a new info object.
     FileInfo(const std::string &Name)

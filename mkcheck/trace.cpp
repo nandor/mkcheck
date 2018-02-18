@@ -153,14 +153,54 @@ Trace::Trace(const fs::path &output)
 // -----------------------------------------------------------------------------
 Trace::~Trace()
 {
-  std::ofstream os((output_ / "files").string());
-  for (const auto &file : fileInfos_) {
-    const auto &info = file.second;
-    os << file.first << " " << info.Name << " " << info.Deleted << " ";
-    for (const auto &dep : info.Dependencies) {
-      os << dep << " ";
+  // Save the list of files.
+  {
+    std::ofstream os((output_ / "files").string());
+    os << "[";
+    for (auto it = fileInfos_.begin(); it != fileInfos_.end();) {
+      const auto &info = it->second;
+      os << "{";
+      os << "\"id\": " << it->first << ",";
+      os << "\"name\": \"" << info.Name << "\"";
+      if (info.Deleted) {
+        os << ",\"deleted\": true";
+      }
+      if (!info.Deps.empty()) {
+        os << ",\"deps\": [";
+        for (auto jt = info.Deps.begin(); jt != info.Deps.end();) {
+          os << *jt;
+          if (++jt != info.Deps.end()) {
+            os << ",";
+          }
+        }
+        os << "]";
+      }
+      os << "}";
+      if (++it != fileInfos_.end()) {
+        os << ",\n";
+      }
     }
-    os << std::endl;
+    os << "]";
+  }
+
+  // Save the list of processes.
+  {
+    std::vector<uint64_t> procs;
+    for (const auto &proc : procs_) {
+      if (!proc.second->IsCOW()) {
+        procs.push_back(proc.second->GetUID());
+      }
+    }
+
+    std::ofstream os((output_ / "procs").string());
+    os << "[";
+    for (auto it = procs.begin(); it != procs.end();) {
+      os << *it;
+      if (++it != procs.end()) {
+        os << ",";
+      }
+    }
+    os << "]";
   }
 }
 
@@ -270,5 +310,5 @@ void Trace::AddDependency(const fs::path &src, const fs::path &dst)
   const auto dID = Find(dst);
 
   auto &info = fileInfos_.find(dID)->second;
-  info.Dependencies.push_back(sID);
+  info.Deps.push_back(sID);
 }
