@@ -41,9 +41,8 @@ export default class Tree {
         }
       });
 
-      let children = null;
+      let children = {};
       for (const key of Object.keys(byToken)) {
-        children = children || {};
         children[key] = buildNode(byToken[key], name + '/' + key, depth + 1);
       }
 
