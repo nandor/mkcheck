@@ -20,10 +20,9 @@
 
 
 // -----------------------------------------------------------------------------
-static void sys_open(Trace *trace, const Args &args)
+static void sys_open(Process *proc, const Args &args)
 {
-  auto proc = trace->GetTrace(args.PID);
-  const std::string path = ReadString(args.PID, args[0]);
+  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
   const uint64_t flags = args[1];
   const int fd = args.Return;
 
@@ -38,137 +37,101 @@ static void sys_open(Trace *trace, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
-static void sys_close(Trace *trace, const Args &args)
+static void sys_close(Process *proc, const Args &args)
 {
-
 }
 
 // -----------------------------------------------------------------------------
-static void sys_stat(Trace *trace, const Args &args)
+static void sys_stat(Process *proc, const Args &args)
 {
+  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
+
   if (args.Return >= 0) {
-    trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
+    proc->AddInput(path);
   }
 }
 
 // -----------------------------------------------------------------------------
-static void sys_lstat(Trace *trace, const Args &args)
+static void sys_lstat(Process *proc, const Args &args)
 {
+  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
+
   if (args.Return >= 0) {
-    trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
+    proc->AddInput(path);
   }
 }
 
 // -----------------------------------------------------------------------------
-static void sys_dup(Trace *trace, const Args &args)
+static void sys_dup(Process *proc, const Args &args)
 {
-  auto proc = trace->GetTrace(args.PID);
-  if (args.Return >= 0) {
-    proc->MapFd(args.Return, proc->GetFd(args[0]));
-  }
-}
-
-// -----------------------------------------------------------------------------
-static void sys_dup2(Trace *trace, const Args &args)
-{
-  auto proc = trace->GetTrace(args.PID);
   if (args.Return >= 0) {
     proc->MapFd(args.Return, proc->GetFd(args[0]));
   }
 }
 
 // -----------------------------------------------------------------------------
-static void sys_access(Trace *trace, const Args &args)
+static void sys_dup2(Process *proc, const Args &args)
 {
   if (args.Return >= 0) {
-    trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
+    proc->MapFd(args.Return, proc->GetFd(args[0]));
   }
 }
 
 // -----------------------------------------------------------------------------
-static void sys_chdir(Trace *trace, const Args &args)
+static void sys_access(Process *proc, const Args &args)
 {
+  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
+
   if (args.Return >= 0) {
-    trace->GetTrace(args.PID)->SetCwd(ReadString(args.PID, args[0]));
+    proc->AddInput(path);
   }
 }
 
 // -----------------------------------------------------------------------------
-static void sys_fchdir(Trace *trace, const Args &args)
+static void sys_chdir(Process *proc, const Args &args)
 {
-  auto proc = trace->GetTrace(args.PID);
+  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
+
   if (args.Return >= 0) {
-    proc->SetCwd(proc->GetFd(args[0]));
+    proc->SetCwd(path);
   }
 }
 
 // -----------------------------------------------------------------------------
-static void sys_rename(Trace *trace, const Args &args)
+static void sys_fchdir(Process *proc, const Args &args)
 {
+  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
+
   if (args.Return >= 0) {
-    trace->GetTrace(args.PID)->Rename(
-        ReadString(args.PID, args[0]),
-        ReadString(args.PID, args[1])
-    );
+    proc->SetCwd(path);
   }
 }
 
 // -----------------------------------------------------------------------------
-static void sys_mkdir(Trace *trace, const Args &args)
+static void sys_rename(Process *proc, const Args &args)
 {
+  const fs::path src = proc->Normalise(ReadString(args.PID, args[0]));
+  const fs::path dst = proc->Normalise(ReadString(args.PID, args[1]));
+
   if (args.Return >= 0) {
-    trace->GetTrace(args.PID)->AddOutput(ReadString(args.PID, args[0]));
+    proc->Rename(src, dst);
   }
 }
 
 // -----------------------------------------------------------------------------
-static void sys_rmdir(Trace *trace, const Args &args)
+static void sys_mkdir(Process *proc, const Args &args)
 {
+  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
+
   if (args.Return >= 0) {
-    trace->GetTrace(args.PID)->Remove(ReadString(args.PID, args[0]));
+    proc->AddOutput(path);
   }
 }
 
 // -----------------------------------------------------------------------------
-static void sys_unlink(Trace *trace, const Args &args)
+static void sys_rmdir(Process *proc, const Args &args)
 {
-  if (args.Return >= 0) {
-    trace->GetTrace(args.PID)->Remove(ReadString(args.PID, args[0]));
-  }
-}
-
-// -----------------------------------------------------------------------------
-static void sys_symlink(Trace *trace, const Args &args)
-{
-  // TODO
-}
-
-// -----------------------------------------------------------------------------
-static void sys_readlink(Trace *trace, const Args &args)
-{
-  if (args.Return >= 0) {
-    trace->GetTrace(args.PID)->AddInput(ReadString(args.PID, args[0]));
-  }
-}
-
-// -----------------------------------------------------------------------------
-static void sys_chmod(Trace *trace, const Args &args)
-{
-  // TODO
-}
-
-// -----------------------------------------------------------------------------
-static void sys_chown(Trace *trace, const Args &args)
-{
-  // TODO
-}
-
-// -----------------------------------------------------------------------------
-static void sys_unlinkat(Trace *trace, const Args &args)
-{
-  const int fd = args[0];
-  auto proc = trace->GetTrace(args.PID);
-  const fs::path path = proc->Realpath(fd, ReadString(args.PID, args[1]));
+  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
 
   if (args.Return >= 0) {
     proc->Remove(path);
@@ -176,12 +139,51 @@ static void sys_unlinkat(Trace *trace, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
-static void sys_openat(Trace *trace, const Args &args)
+static void sys_unlink(Process *proc, const Args &args)
 {
-  auto proc = trace->GetTrace(args.PID);
+  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
 
+  if (args.Return >= 0) {
+    proc->Remove(path);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_symlink(Process *proc, const Args &args)
+{
+  const fs::path src = proc->Normalise(ReadString(args.PID, args[0]));
+  const fs::path dst = proc->Normalise(ReadString(args.PID, args[1]));
+
+  if (args.Return >= 0) {
+    proc->Symlink(src, dst);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_readlink(Process *proc, const Args &args)
+{
+  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
+  if (args.Return >= 0) {
+    proc->AddInput(path);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_unlinkat(Process *proc, const Args &args)
+{
   const int fd = args[0];
-  const fs::path path = proc->Realpath(fd, ReadString(args.PID, args[1]));
+  const fs::path path = proc->Normalise(fd, ReadString(args.PID, args[1]));
+
+  if (args.Return >= 0) {
+    proc->Remove(path);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_openat(Process *proc, const Args &args)
+{
+  const int fd = args[0];
+  const fs::path path = proc->Normalise(fd, ReadString(args.PID, args[1]));
   const uint64_t flags = args[2];
 
   if (args.Return >= 0) {
@@ -195,11 +197,10 @@ static void sys_openat(Trace *trace, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
-static void sys_faccessat(Trace *trace, const Args &args)
+static void sys_faccessat(Process *proc, const Args &args)
 {
   const int fd = args[0];
-  auto proc = trace->GetTrace(args.PID);
-  const fs::path path = proc->Realpath(fd, ReadString(args.PID, args[1]));
+  const fs::path path = proc->Normalise(fd, ReadString(args.PID, args[1]));
 
   if (args.Return >= 0) {
     proc->AddInput(path);
@@ -207,11 +208,11 @@ static void sys_faccessat(Trace *trace, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
-static void sys_ignore(Trace *trace, const Args &args)
+static void sys_ignore(Process *proc, const Args &args)
 {
 }
 
-typedef void (*HandlerFn) (Trace *trace, const Args &args);
+typedef void (*HandlerFn) (Process *proc, const Args &args);
 
 static const HandlerFn kHandlers[] =
 {
@@ -270,8 +271,8 @@ static const HandlerFn kHandlers[] =
   /* 0x057 */ [SYS_unlink            ] = sys_unlink,
   /* 0x058 */ [SYS_symlink           ] = sys_symlink,
   /* 0x059 */ [SYS_readlink          ] = sys_readlink,
-  /* 0x05A */ [SYS_chmod             ] = sys_chmod,
-  /* 0x05C */ [SYS_chown             ] = sys_chown,
+  /* 0x05A */ [SYS_chmod             ] = sys_ignore,
+  /* 0x05C */ [SYS_chown             ] = sys_ignore,
   /* 0x05F */ [SYS_umask             ] = sys_ignore,
   /* 0x060 */ [SYS_gettimeofday      ] = sys_ignore,
   /* 0x061 */ [SYS_getrlimit         ] = sys_ignore,
@@ -314,10 +315,10 @@ static const HandlerFn kHandlers[] =
 // -----------------------------------------------------------------------------
 void Handle(Trace *trace, int64_t sno, const Args &args)
 {
-  // TODO: add working directory to inputs
   if (sno < 0) {
     return;
   }
+
   if (sno > sizeof(kHandlers) / sizeof(kHandlers[0]) || !kHandlers[sno]) {
     throw std::runtime_error(
         "Unknown syscall " + std::to_string(sno) + " in " +
@@ -325,5 +326,5 @@ void Handle(Trace *trace, int64_t sno, const Args &args)
     );
   }
 
-  kHandlers[sno](trace, args);
+  kHandlers[sno](trace->GetTrace(args.PID), args);
 }

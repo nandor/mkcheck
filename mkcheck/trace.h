@@ -55,9 +55,10 @@ public:
   fs::path GetCwd() const { return cwd_; }
 
   /// Resolves a path, relative to the cwd.
-  fs::path Realpath(const fs::path &path);
+  fs::path Normalise(const fs::path &path);
   /// Resolves a path, relative to any directory.
-  fs::path Realpath(int fd, const fs::path &path);
+  fs::path Normalise(int fd, const fs::path &path);
+
   /// Adds an input file to a process.
   void AddInput(const fs::path &path);
   /// Adds an output file to a process.
@@ -70,15 +71,13 @@ public:
   void Remove(const fs::path &path);
   /// Renames a file.
   void Rename(const fs::path &from, const fs::path &to);
+  /// Creates a symlink.
+  void Symlink(const fs::path &target, const fs::path &linkpath);
 
   /// Maps a file descriptor to a path.
   void MapFd(int fd, const fs::path &path);
   /// Returns the path to a file opened by a descriptor.
   fs::path GetFd(int fd);
-
-private:
-  /// Resolves a file to a unique identifier.
-  fs::path Normalise(const fs::path &path);
 
 private:
   /// Pointer to the trace.
@@ -133,12 +132,12 @@ public:
   Process *GetTrace(pid_t pid);
   /// Unlinks a file.
   void Unlink(const fs::path &path);
-  /// Renames a file.
-  void Rename(const fs::path &from, const fs::path &to);
   /// Finds a file.
   uint64_t Find(const fs::path &path);
   /// Returns the name of a file.
   std::string GetFileName(uint64_t fid) const;
+  /// Adds a symlink/rename dependency between two files.
+  void AddDependency(const fs::path &src, const fs::path &dst);
 
 private:
   /// Output directory.
@@ -151,6 +150,24 @@ private:
   std::unordered_map<pid_t, std::shared_ptr<Process>> procs_;
   /// Map of files to current IDs.
   std::unordered_map<std::string, uint64_t> fileIDs_;
+
+  /// Information about a file.
+  struct FileInfo {
+    /// Name of the file.
+    std::string Name;
+    /// Flag indicating if this one exists by the end of the build.
+    bool Deleted;
+    /// List of other files this depends on.
+    std::vector<uint64_t> Dependencies;
+
+    /// Constructs a new info object.
+    FileInfo(const std::string &Name)
+      : Name(Name)
+      , Deleted(false)
+    {
+    }
+  };
+
   /// Set of names attached to an ID.
-  std::unordered_map<uint64_t, std::vector<std::string>> fileNames_;
+  std::unordered_map<uint64_t, FileInfo> fileInfos_;
 };

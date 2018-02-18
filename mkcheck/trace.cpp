@@ -11,6 +11,7 @@
 
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 
 
 
@@ -38,41 +39,57 @@ Process::~Process()
 }
 
 // -----------------------------------------------------------------------------
-fs::path Process::Realpath(const fs::path &path)
+fs::path Process::Normalise(const fs::path &path)
 {
-  if (path.is_relative()) {
-    return (cwd_ / path).normalize();
-  } else {
-    return path;
-  }
+  return Normalise(AT_FDCWD, path);
 }
 
 // -----------------------------------------------------------------------------
-fs::path Process::Realpath(int fd, const fs::path &path)
+fs::path Process::Normalise(int fd, const fs::path &path)
 {
+  boost::system::error_code ec;
+
+  // Get rid of the relative path.
+  fs::path fullPath;
   if (path.is_relative()) {
     if (fd == AT_FDCWD) {
-      return (cwd_ / path).normalize();
+      fullPath = cwd_ / path;
     } else {
       throw std::runtime_error("Not implemented: realpath");
     }
   } else {
-    return path;
+    fullPath = path;
   }
+
+  // If the file exists, return the canonical path.
+  const fs::path canonical = fs::canonical(path, ec);
+  if (!ec) {
+    return canonical;
+  }
+
+  // If the file was deleted, try to canonicalise the parent.
+  const fs::path parent = fullPath.parent_path();
+  const fs::path file = fullPath.filename();
+
+  const fs::path canonicalParent = fs::canonical(parent, ec);
+  if (!ec) {
+    return canonicalParent / file;
+  }
+
+  return path;
 }
 
 // -----------------------------------------------------------------------------
 void Process::AddInput(const fs::path &path)
 {
-  inputs_.insert(trace_->Find(Normalise(path)));
+  inputs_.insert(trace_->Find(path));
 }
 
 // -----------------------------------------------------------------------------
 void Process::AddOutput(const fs::path &path)
 {
-  const auto &fullPath = Normalise(path);
-  outputs_.insert(trace_->Find(fullPath));
-  AddDestination(fullPath);
+  outputs_.insert(trace_->Find(path));
+  AddDestination(path);
 }
 
 // -----------------------------------------------------------------------------
@@ -93,8 +110,16 @@ void Process::Remove(const fs::path &path)
 // -----------------------------------------------------------------------------
 void Process::Rename(const fs::path &from, const fs::path &to)
 {
-  trace_->Rename(Normalise(from), Normalise(to));
-  AddDestination(to);
+  trace_->Unlink(from);
+  trace_->AddDependency(from, to);
+  AddOutput(to);
+}
+
+// -----------------------------------------------------------------------------
+void Process::Symlink(const fs::path &target, const fs::path &linkpath)
+{
+  trace_->AddDependency(target, linkpath);
+  AddOutput(linkpath);
 }
 
 // -----------------------------------------------------------------------------
@@ -107,12 +132,6 @@ void Process::MapFd(int fd, const fs::path &path)
 fs::path Process::GetFd(int fd)
 {
   return files_[fd];
-}
-
-// -----------------------------------------------------------------------------
-fs::path Process::Normalise(const fs::path &path)
-{
-  return fs::absolute(path, cwd_).normalize();
 }
 
 
@@ -135,10 +154,11 @@ Trace::Trace(const fs::path &output)
 Trace::~Trace()
 {
   std::ofstream os((output_ / "files").string());
-  for (const auto &file : fileNames_) {
-    os << file.first << " ";
-    for (const auto &name : file.second) {
-      os << name << " ";
+  for (const auto &file : fileInfos_) {
+    const auto &info = file.second;
+    os << file.first << " " << info.Name << " " << info.Deleted << " ";
+    for (const auto &dep : info.Dependencies) {
+      os << dep << " ";
     }
     os << std::endl;
   }
@@ -215,16 +235,9 @@ Process *Trace::GetTrace(pid_t pid)
 // -----------------------------------------------------------------------------
 void Trace::Unlink(const fs::path &path)
 {
-  fileIDs_.erase(path.string());
-}
-
-// -----------------------------------------------------------------------------
-void Trace::Rename(const fs::path &from, const fs::path &to)
-{
-  auto fromID = Find(from);
-  fileIDs_.erase(from.string());
-  fileIDs_[to.string()] = fromID;
-  fileNames_[fromID].push_back(to.string());
+  auto fileID = Find(path);
+  auto &info = fileInfos_.find(fileID)->second;
+  info.Deleted = true;
 }
 
 // -----------------------------------------------------------------------------
@@ -235,7 +248,7 @@ uint64_t Trace::Find(const fs::path &path)
   if (it == fileIDs_.end()) {
     uint64_t id = nextFID_++;
     fileIDs_.emplace(name, id);
-    fileNames_.emplace(id, std::vector<std::string>{ name });
+    fileInfos_.emplace(id, name);
     return id;
   } else {
     return it->second;
@@ -245,7 +258,17 @@ uint64_t Trace::Find(const fs::path &path)
 // -----------------------------------------------------------------------------
 std::string Trace::GetFileName(uint64_t fid) const
 {
-  auto it = fileNames_.find(fid);
-  assert(it != fileNames_.end());
-  return *it->second.rbegin();
+  auto it = fileInfos_.find(fid);
+  assert(it != fileInfos_.end());
+  return it->second.Name;
+}
+
+// -----------------------------------------------------------------------------
+void Trace::AddDependency(const fs::path &src, const fs::path &dst)
+{
+  const auto sID = Find(src);
+  const auto dID = Find(dst);
+
+  auto &info = fileInfos_.find(dID)->second;
+  info.Dependencies.push_back(sID);
 }
