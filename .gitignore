@@ -5,3 +5,6 @@ test/out
 tmp
 graph
 *.pyc
+tools/viewer/package.lock.json
+tools/viewer/dist/bundle.js
+node_modules
