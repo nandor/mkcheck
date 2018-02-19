@@ -71,6 +71,9 @@ public:
   /// Destroys the process & writes data to a file.
   ~Process();
 
+  /// Dumps a process to a stream.
+  void Dump(std::ostream &os);
+
   /// Returns the parent UID.
   uint64_t GetParent() const { return parent_; }
   /// Returns the process UID.

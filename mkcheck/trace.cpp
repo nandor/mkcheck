@@ -40,15 +40,19 @@ Process::Process(
 // -----------------------------------------------------------------------------
 Process::~Process()
 {
-  if (isCOW_) {
-    return;
-  }
+}
 
-  std::ofstream os((trace_->GetOutput() / std::to_string(uid_)).string());
+// -----------------------------------------------------------------------------
+void Process::Dump(std::ostream &os)
+{
   os << "{";
   os << "  \"uid\": " << uid_ << "," << std::endl;
   os << "  \"parent\": " << parent_ << "," << std::endl;
   os << "  \"image\": " << image_ << "," << std::endl;
+
+  if (isCOW_) {
+    os << "  \"cow\": true,";
+  }
 
   // Dump output files.
   os << "  \"output\": [";
@@ -312,17 +316,17 @@ Trace::~Trace()
 
   // Save the list of processes.
   {
-    std::vector<uint64_t> procs;
+    std::vector<Process *> procs;
     for (const auto &proc : procs_) {
       if (!proc.second->IsCOW()) {
-        procs.push_back(proc.second->GetUID());
+        procs.push_back(proc.second.get());
       }
     }
 
     std::ofstream os((output_ / "procs").string());
     os << "[";
     for (auto it = procs.begin(); it != procs.end();) {
-      os << *it;
+      (*it)->Dump(os);
       if (++it != procs.end()) {
         os << ",";
       }
