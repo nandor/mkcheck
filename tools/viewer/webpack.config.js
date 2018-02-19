@@ -18,6 +18,7 @@ module.exports = {
       index: 'index.html',
     },
   },
+  devtool: 'inline-source-map',
   module: {
     loaders: [
       {
@@ -26,7 +27,7 @@ module.exports = {
         loader: 'babel-loader',
         query: {
           babelrc: false,
-          presets: [ "es2016", "react"] 
+          presets: [ "es2016", "react"]
         }
       }
     ]

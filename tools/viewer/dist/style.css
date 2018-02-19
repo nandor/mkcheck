@@ -3,17 +3,17 @@
  * (C) 2017 Nandor Licker. All rights reserved.
  */
 
-.tree-view {
+.tree-node {
 }
 
-.tree-view-title {
+.tree-node-title {
   cursor: pointer;
 }
 
-.tree-view-title .deleted {
+.tree-node-title .deleted {
   color: red;
 }
 
-.tree-view-children {
+.tree-node-children {
   margin-left: 10px;
 }

@@ -7,7 +7,9 @@ class TreeNode {
 }
 
 export default class Tree {
-  constructor(id, name, deleted, exists, deps, children) {
+  constructor(uid, parent, id, name, deleted, exists, deps, children) {
+    this.uid = uid;
+    this.parent = parent;
     this.id = id;
     this.name = name;
     this.deleted = deleted;
@@ -31,40 +33,58 @@ export default class Tree {
       .sort();
 
     const byID = {};
+    let nextUID = 1;
 
-    const buildNode = (files, name, depth) => {
+    const buildNode = (parent, files, name, depth) => {
       const byToken = {};
-      let c = null;
+      let current = null;
       files.forEach((file) => {
         if (file.path.length > depth) {
           const token = file.path[depth];
           byToken[token] = byToken[token] || [];
           byToken[token].push(file);
         } else if (file.path.length == depth) {
-          c = file.file;
+          current = file.file;
         }
       });
 
+      const uid = nextUID++;
+
       let children = {};
       for (const key of Object.keys(byToken)) {
-        children[key] = buildNode(byToken[key], name + '/' + key, depth + 1);
+        children[key] = buildNode(
+            uid,
+            byToken[key],
+            name + '/' + key,
+            depth + 1
+        );
       }
 
-      const deleted = c ? c.deleted : false;
-      const deps = c ? c.deps : [];
-      const id = c ? c.id : 0;
-      const exists = c ? c.exists : Object.keys(children).some(key => {
+      const deleted = current ? current.deleted : false;
+      const deps = current ? current.deps : [];
+      const id = current ? current.id : 0;
+
+      const exists = current ? current.exists : Object.keys(children).some(key => {
         return children[key].exists;
       });
 
-      const node = new Tree(id, name || '/', deleted, exists, deps, children);
+      const node = new Tree(
+          uid,
+          parent,
+          id,
+          name || '/',
+          deleted,
+          exists,
+          deps,
+          children
+      );
+
       if (id != 0) {
-        byID[id] = node;
+        byID[uid] = node;
       }
       return node;
     };
 
-    const root = buildNode(files, '', 0);
-    return { root: root, nodes: byID };
+    return { root: buildNode(0, files, '', 0), nodes: byID };
   }
 }

@@ -3,65 +3,46 @@
 // (C) 2017 Nandor Licker. All rights reserved.
 
 import React from 'react';
-
+import TreeNode from '../components/TreeNode.jsx';
 
 
 export default class TreeView extends React.Component {
   constructor(props) {
     super(props)
-    this.state = {
-      expanded: false
-    };
+    this.state = { highlighted: null };
   }
+
+  onSearch(ev) {
+    const term = ev.target.value;
+    const nodes = this.props.nodes;
+
+    const selected = [];
+    for (const key of Object.keys(nodes)) {
+      const node = nodes[key];
+      if (node.fileName().indexOf(term) != -1) {
+        selected.push(key);
+      }
+    }
+
+    const highlighted = new Set();
+    for (const key of selected) {
+      for (let node = nodes[key]; node; node = nodes[node.parent]) {
+        highlighted.add(node.uid);
+      }
+    }
+
+    if (highlighted.size < 50) {
+      this.setState({ highlighted });
+    } else {
+      this.setState({ highlighted: null });
+    }
+  }
+
   render() {
-    const node = this.props.node;
-    const children = Object.values(node.children).sort((a, b) => {
-      const la = Object.keys(a.children).length;
-      const lb = Object.keys(b.children).length;
-      if ((la == 0 && lb == 0) || (la > 0 && lb > 0)) {
-        if (a.name > b.name) {
-          return 1;
-        } else if (a.name < b.name) {
-          return -1;
-        } else {
-          return 0;
-        }
-      }
-
-      if (la > 0 && lb == 0) {
-        return -1;
-      } else {
-        return 1;
-      }
-    });
-
-    const colour = node.deleted ? 'red' : (!node.exists ? 'orange' : 'auto');
-
     return (
-      <div className="tree-view">
-        <div
-            className="tree-view-title"
-            style={{ color: colour }}>
-          { children.length > 0 ? (
-            <a onClick={() => this.setState({expanded: !this.state.expanded})}>
-              {this.state.expanded ? '-' : '+'}
-              {node.fileName()}
-            </a>
-          ) : (
-            node.fileName()
-          )}
-        </div>
-        { this.state.expanded && children.length > 0 ? (
-          <div className="tree-view-children">
-            { node.children ? children.map((child, idx) => {
-              return <TreeView key={idx} node={child}/>;
-            }) : (
-              null
-            )}
-          </div>
-        ) : (
-          null
-        )}
+      <div>
+        <input type="text" onChange={(ev) => this.onSearch(ev)} />
+        <TreeNode node={this.props.root} highlighted={this.state.highlighted} />
       </div>
     );
   }

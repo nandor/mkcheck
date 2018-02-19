@@ -26,7 +26,7 @@ class App extends React.Component {
       return null;
     }
     let { root, nodes } = this.state.tree;
-    return <TreeView node={root}/>;
+    return <TreeView nodes={nodes} root={root}/>;
   }
 }
 
