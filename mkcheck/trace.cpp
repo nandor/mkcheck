@@ -462,7 +462,6 @@ void Trace::AddDependency(const fs::path &src, const fs::path &dst)
 {
   const auto sID = Find(src);
   const auto dID = Find(dst);
-
   auto &info = fileInfos_.find(dID)->second;
   info.Deps.push_back(sID);
 }

@@ -211,10 +211,10 @@ static void sys_unlink(Process *proc, const Args &args)
 static void sys_symlink(Process *proc, const Args &args)
 {
   const fs::path src = proc->Normalise(ReadString(args.PID, args[0]));
-  const fs::path dst = proc->Normalise(ReadString(args.PID, args[1]));
+  const fs::path dst = ReadString(args.PID, args[1]);
 
   if (args.Return >= 0) {
-    proc->Symlink(src, dst);
+    proc->Symlink(src, proc->Normalise(dst.parent_path()) / dst.filename());
   }
 }
 

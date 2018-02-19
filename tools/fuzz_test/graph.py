@@ -3,8 +3,7 @@
 # (C) 2018 Nandor Licker. ALl rights reserved.
 
 import os
-
-from parser import get_procs, read_proc, find_names
+import json
 
 class DependencyGraph(object):
     """Graph describing dependencies between file paths."""
@@ -27,6 +26,8 @@ class DependencyGraph(object):
     def find_deps(self, src):
         deps = set()
         def traverse(name):
+            if name in deps:
+                return
             if name in self.nodes:
                 for edge in self.nodes[name].edges:
                     deps.add(edge)
@@ -35,16 +36,65 @@ class DependencyGraph(object):
         return deps
 
 
-def parse_graph(prefix, path):
+def parse_graph(path):
+    """Constructs the dependency graph based on files."""
+
+    # Find all files.
+    with open(os.path.join(path, 'files'), 'r') as f:
+        files = {}
+        for file in json.loads(f.read()):
+            files[file['id']] = file
+
     graph = DependencyGraph()
 
-    names = find_names(prefix, path)
+    for uid, file in files.iteritems():
+        for dep in file.get('deps', []):
+            graph.add_dependency(files[dep]['name'], files[uid]['name'])
 
-    for proc in get_procs(path):
-        _, outputs, inputs = read_proc(os.path.join(path, str(proc)))
-        for input in inputs:
-            for output in outputs:
-                if input in names and output in names:
-                    graph.add_dependency(names[input], names[output])
+
+    with open(os.path.join(path, 'procs'), 'r') as p:
+        for proc in json.loads(p.read()):
+            with open(os.path.join(path, str(proc)), 'r') as f:
+                data = json.loads(f.read())
+
+            for input in data.get('input', []):
+                for output in data.get('output', []):
+                    graph.add_dependency(
+                        files[input]['name'],
+                        files[output]['name']
+                    )
 
     return graph
+
+
+def parse_files(path):
+    """Finds files written and read during a clean build."""
+
+    # Find all files.
+    with open(os.path.join(path, 'files'), 'r') as f:
+        files = {}
+        for file in json.loads(f.read()):
+            files[file['id']] = file
+
+    # For each process, find the outputs.
+    inputs = set()
+    outputs = set()
+    with open(os.path.join(path, 'procs'), 'r') as p:
+        for proc in json.loads(p.read()):
+            with open(os.path.join(path, str(proc)), 'r') as f:
+                data = json.loads(f.read())
+                inputs = inputs | set(data.get('input', []))
+                outputs = outputs | set(data.get('output', []))
+
+    def persisted(uid):
+        if files[uid].get('deleted', False):
+            return False
+        if not files[uid].get('exists', False):
+            return False
+        name = files[uid]['name']
+        return os.path.exists(name) and not os.path.isdir(name)
+
+    inputs = {files[uid]['name'] for uid in inputs if persisted(uid)}
+    outputs = {files[uid]['name'] for uid in outputs if persisted(uid)}
+
+    return inputs, outputs
