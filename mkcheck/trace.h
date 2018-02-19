@@ -176,6 +176,8 @@ public:
   void Unlink(const fs::path &path);
   /// Finds a file.
   uint64_t Find(const fs::path &path);
+  /// Clears delete/exists flags when a syscall creates a file.
+  void Create(const fs::path &target);
   /// Returns the name of a file.
   std::string GetFileName(uint64_t fid) const;
   /// Adds a symlink/rename dependency between two files.

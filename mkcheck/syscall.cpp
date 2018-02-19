@@ -276,13 +276,6 @@ static void sys_faccessat(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
-static void sys_pipe2(Process *proc, const Args &args)
-{
-  // TODO: implment this
-  abort();
-}
-
-// -----------------------------------------------------------------------------
 static void sys_ignore(Process *proc, const Args &args)
 {
 }
@@ -383,7 +376,6 @@ static const HandlerFn kHandlers[] =
   /* 0x118 */ [SYS_utimensat         ] = sys_ignore,
   /* 0x122 */ [SYS_eventfd2          ] = sys_ignore,
   /* 0x123 */ [SYS_epoll_create1     ] = sys_ignore,
-  /* 0x125 */ [SYS_pipe2             ] = sys_pipe2,
   /* 0x12E */ [SYS_prlimit64         ] = sys_ignore,
 };
 

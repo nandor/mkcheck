@@ -113,6 +113,7 @@ void Process::AddOutput(const fs::path &path)
 {
   outputs_.insert(trace_->Find(path));
   AddDestination(path);
+  trace_->Create(path);
 }
 
 // -----------------------------------------------------------------------------
@@ -142,6 +143,7 @@ void Process::Rename(const fs::path &from, const fs::path &to)
 void Process::Symlink(const fs::path &target, const fs::path &linkpath)
 {
   trace_->AddDependency(target, linkpath);
+  trace_->Create(linkpath);
   AddOutput(linkpath);
 }
 
@@ -249,7 +251,7 @@ Trace::Trace(const fs::path &output)
     fs::remove_all(output);
   }
   if (!fs::create_directories(output)) {
-    throw std::runtime_error("Cannot craete directory.");
+    throw std::runtime_error("Cannot create directory.");
   }
 }
 
@@ -404,6 +406,17 @@ uint64_t Trace::Find(const fs::path &path)
   } else {
     return it->second;
   }
+}
+
+// -----------------------------------------------------------------------------
+void Trace::Create(const fs::path &path)
+{
+  const std::string name = path.string();
+  auto it = fileIDs_.find(name);
+  if (it == fileIDs_.end()) {
+    throw std::runtime_error("Unknown file: " + path.string());
+  }
+  fileInfos_.find(it->second)->second.Deleted = false;
 }
 
 // -----------------------------------------------------------------------------
