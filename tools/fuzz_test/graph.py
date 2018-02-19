@@ -5,13 +5,15 @@
 import os
 import json
 
+
+
 class DependencyGraph(object):
     """Graph describing dependencies between file paths."""
 
     class Node(object):
         def __init__(self, path):
             self.path = path
-            self.edges = []
+            self.edges = set()
 
     def __init__(self):
         self.nodes = {}
@@ -21,16 +23,16 @@ class DependencyGraph(object):
             self.nodes[src] = self.Node(src)
         if dst not in self.nodes:
             self.nodes[dst] = self.Node(dst)
-        self.nodes[src].edges.append(dst)
+        self.nodes[src].edges.add(dst)
 
     def find_deps(self, src):
         deps = set()
         def traverse(name):
             if name in deps:
                 return
+            deps.add(name)
             if name in self.nodes:
                 for edge in self.nodes[name].edges:
-                    deps.add(edge)
                     traverse(edge)
         traverse(src)
         return deps
@@ -51,14 +53,10 @@ def parse_graph(path):
         for dep in file.get('deps', []):
             graph.add_dependency(files[dep]['name'], files[uid]['name'])
 
-
     with open(os.path.join(path, 'procs'), 'r') as p:
         for proc in json.loads(p.read()):
-            with open(os.path.join(path, str(proc)), 'r') as f:
-                data = json.loads(f.read())
-
-            for input in data.get('input', []):
-                for output in data.get('output', []):
+            for input in proc.get('input', []):
+                for output in proc.get('output', []):
                     graph.add_dependency(
                         files[input]['name'],
                         files[output]['name']
@@ -81,10 +79,8 @@ def parse_files(path):
     outputs = set()
     with open(os.path.join(path, 'procs'), 'r') as p:
         for proc in json.loads(p.read()):
-            with open(os.path.join(path, str(proc)), 'r') as f:
-                data = json.loads(f.read())
-                inputs = inputs | set(data.get('input', []))
-                outputs = outputs | set(data.get('output', []))
+            inputs = inputs | set(proc.get('input', []))
+            outputs = outputs | set(proc.get('output', []))
 
     def persisted(uid):
         if files[uid].get('deleted', False):

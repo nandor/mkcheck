@@ -210,10 +210,10 @@ static void sys_unlink(Process *proc, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_symlink(Process *proc, const Args &args)
 {
-  const fs::path src = proc->Normalise(ReadString(args.PID, args[0]));
-  const fs::path dst = ReadString(args.PID, args[1]);
-
   if (args.Return >= 0) {
+    const fs::path src = proc->Normalise(ReadString(args.PID, args[0]));
+    const fs::path dst = ReadString(args.PID, args[1]);
+
     proc->Symlink(src, proc->Normalise(dst.parent_path()) / dst.filename());
   }
 }
@@ -350,6 +350,7 @@ static const HandlerFn kHandlers[] =
   /* 0x03D */ [SYS_wait4             ] = sys_ignore,
   /* 0x03F */ [SYS_uname             ] = sys_ignore,
   /* 0x048 */ [SYS_fcntl             ] = sys_fcntl,
+  /* 0x049 */ [SYS_flock             ] = sys_ignore,
   /* 0x04D */ [SYS_ftruncate         ] = sys_ignore,
   /* 0x04E */ [SYS_getdents          ] = sys_ignore,
   /* 0x04F */ [SYS_getcwd            ] = sys_ignore,
@@ -362,6 +363,7 @@ static const HandlerFn kHandlers[] =
   /* 0x058 */ [SYS_symlink           ] = sys_symlink,
   /* 0x059 */ [SYS_readlink          ] = sys_readlink,
   /* 0x05A */ [SYS_chmod             ] = sys_ignore,
+  /* 0x05B */ [SYS_fchmod            ] = sys_ignore,
   /* 0x05C */ [SYS_chown             ] = sys_ignore,
   /* 0x05F */ [SYS_umask             ] = sys_ignore,
   /* 0x060 */ [SYS_gettimeofday      ] = sys_ignore,
@@ -395,6 +397,7 @@ static const HandlerFn kHandlers[] =
   /* 0x107 */ [SYS_unlinkat          ] = sys_unlinkat,
   /* 0x10D */ [SYS_faccessat         ] = sys_faccessat,
   /* 0x111 */ [SYS_set_robust_list   ] = sys_ignore,
+  /* 0x113 */ [SYS_splice            ] = sys_ignore,
   /* 0x118 */ [SYS_utimensat         ] = sys_ignore,
   /* 0x122 */ [SYS_eventfd2          ] = sys_ignore,
   /* 0x123 */ [SYS_epoll_create1     ] = sys_ignore,

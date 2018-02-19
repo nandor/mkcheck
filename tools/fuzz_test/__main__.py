@@ -27,13 +27,7 @@ run_proc([ "make", "clean" ], cwd=buildPath)
 
 # Run the build with mkcheck.
 run_proc(
-  [
-    toolPath,
-    "--output={0}".format(tmpPath),
-    "--",
-    "make",
-    "-j1"
-  ],
+  [ toolPath, "--output={0}".format(tmpPath), "--", "make", "-j1" ],
   cwd=buildPath
 )
 
@@ -66,8 +60,6 @@ for input in inputs:
 
     # Find expected changes.
     expected = graph.find_deps(input) & outputs
-    if input in outputs:
-        expected.add(input)
 
     # Report differences.
     if modified != expected:
