@@ -98,7 +98,6 @@ fs::path Process::Normalise(int fd, const fs::path &path)
     return canonicalParent / file;
   }
 
-  std::cerr << fullPath << "\n";
   return fullPath;
 }
 
@@ -270,6 +269,9 @@ Trace::~Trace()
       if (info.Deleted) {
         os << ",\"deleted\": true";
       }
+      if (info.Exists) {
+        os << ",\"exists\": true";
+      }
       if (!info.Deps.empty()) {
         os << ",\"deps\": [";
         for (auto jt = info.Deps.begin(); jt != info.Deps.end();) {
@@ -365,7 +367,7 @@ void Trace::StartTrace(pid_t pid, const fs::path &image)
       pid,
       proc->GetParent(),
       nextUID_++,
-      Find(image),
+      Find(proc->Normalise(image)),
       proc->GetInheritedFDs(),
       proc->GetCwd(),
       false
@@ -391,17 +393,22 @@ void Trace::Unlink(const fs::path &path)
   auto fileID = Find(path);
   auto &info = fileInfos_.find(fileID)->second;
   info.Deleted = true;
+  info.Exists = false;
 }
 
 // -----------------------------------------------------------------------------
 uint64_t Trace::Find(const fs::path &path)
 {
+  if (!path.is_absolute()) {
+    throw std::runtime_error("Path not absolute: " + path.string());
+  }
+
   const std::string name = path.string();
   auto it = fileIDs_.find(name);
   if (it == fileIDs_.end()) {
     uint64_t id = nextFID_++;
     fileIDs_.emplace(name, id);
-    fileInfos_.emplace(id, name);
+    fileInfos_.emplace(id, FileInfo(name, fs::exists(path)));
     return id;
   } else {
     return it->second;
@@ -416,7 +423,10 @@ void Trace::Create(const fs::path &path)
   if (it == fileIDs_.end()) {
     throw std::runtime_error("Unknown file: " + path.string());
   }
-  fileInfos_.find(it->second)->second.Deleted = false;
+
+  FileInfo &info = fileInfos_.find(it->second)->second;
+  info.Deleted = false;
+  info.Exists = true;
 }
 
 // -----------------------------------------------------------------------------

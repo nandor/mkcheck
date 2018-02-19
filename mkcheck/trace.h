@@ -201,13 +201,16 @@ private:
     std::string Name;
     /// Flag indicating if this one exists by the end of the build.
     bool Deleted;
+    /// Flag indicating if the file exists or not.
+    bool Exists;
     /// List of other files this depends on.
     std::vector<uint64_t> Deps;
 
     /// Constructs a new info object.
-    FileInfo(const std::string &Name)
+    FileInfo(const std::string &Name, bool exists)
       : Name(Name)
       , Deleted(false)
+      , Exists(exists)
     {
     }
   };

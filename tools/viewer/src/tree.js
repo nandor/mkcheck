@@ -7,10 +7,11 @@ class TreeNode {
 }
 
 export default class Tree {
-  constructor(id, name, deleted, deps, children) {
+  constructor(id, name, deleted, exists, deps, children) {
     this.id = id;
     this.name = name;
     this.deleted = deleted;
+    this.exists = exists;
     this.deps = deps;
     this.children = children;
   }
@@ -33,14 +34,14 @@ export default class Tree {
 
     const buildNode = (files, name, depth) => {
       const byToken = {};
-      let current = null;
+      let c = null;
       files.forEach((file) => {
         if (file.path.length > depth) {
           const token = file.path[depth];
           byToken[token] = byToken[token] || [];
           byToken[token].push(file);
         } else if (file.path.length == depth) {
-          current = file.file;
+          c = file.file;
         }
       });
 
@@ -49,11 +50,14 @@ export default class Tree {
         children[key] = buildNode(byToken[key], name + '/' + key, depth + 1);
       }
 
-      const deleted = current ? current.deleted : false;
-      const deps = current ? current.deps : [];
-      const id = current ? current.id : 0;
+      const deleted = c ? c.deleted : false;
+      const deps = c ? c.deps : [];
+      const id = c ? c.id : 0;
+      const exists = c ? c.exists : Object.keys(children).some(key => {
+        return children[key].exists;
+      });
 
-      const node = new Tree(id, name || '/', deleted, deps, children);
+      const node = new Tree(id, name || '/', deleted, exists, deps, children);
       if (id != 0) {
         byID[id] = node;
       }

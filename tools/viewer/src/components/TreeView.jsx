@@ -35,11 +35,13 @@ export default class TreeView extends React.Component {
       }
     });
 
+    const colour = node.deleted ? 'red' : (!node.exists ? 'orange' : 'auto');
+
     return (
       <div className="tree-view">
         <div
             className="tree-view-title"
-            style={{ color: node.deleted ? 'red' : 'auto'}}>
+            style={{ color: colour }}>
           { children.length > 0 ? (
             <a onClick={() => this.setState({expanded: !this.state.expanded})}>
               {this.state.expanded ? '-' : '+'}
