@@ -15,8 +15,8 @@ class App extends React.Component {
     this.state = { tree: null };
 
     fetch('/data/files')
-      .then((data) => data.json())
-      .then((data) => {
+      .then(data => data.json())
+      .then(data => {
         this.setState({ tree: Tree.build(data) });
       });
   }

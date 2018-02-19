@@ -45,19 +45,39 @@ Process::~Process()
   }
 
   std::ofstream os((trace_->GetOutput() / std::to_string(uid_)).string());
-  os << uid_ << " " << parent_ << " " << image_ << std::endl;
+  os << "{";
+  os << "  \"uid\": " << uid_ << "," << std::endl;
+  os << "  \"parent\": " << parent_ << "," << std::endl;
+  os << "  \"image\": " << image_ << "," << std::endl;
 
-  for (const auto output : outputs_) {
-    os << output << " ";
-  }
-  os << std::endl;
-
-  for (const auto input : inputs_) {
-    if (outputs_.find(input) == outputs_.end()) {
-      os << input << " ";
+  // Dump output files.
+  os << "  \"output\": [";
+  for (auto it = outputs_.begin(); it != outputs_.end();) {
+    os << *it;
+    if (++it != outputs_.end()) {
+      os << ",";
     }
   }
-  os << std::endl;
+  os << "]," << std::endl;
+
+  // Dump input files.
+  os << "  \"input\": [";
+  std::vector<int64_t> inputs;
+  for (const auto input : inputs_) {
+    if (outputs_.find(input) == outputs_.end()) {
+      inputs.push_back(input);
+    }
+  }
+
+  for (auto it = inputs.begin(); it != inputs.end();) {
+    os << *it;
+    if (++it != inputs.end()) {
+      os << ",";
+    }
+  }
+  os << "]" << std::endl;
+
+  os << "}";
 }
 
 // -----------------------------------------------------------------------------
