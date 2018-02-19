@@ -276,6 +276,28 @@ static void sys_faccessat(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_pipe2(Process *proc, const Args &args)
+{
+  int fds[2];
+  ReadBuffer(args.PID, fds, args[0], 2 * sizeof(int));
+  const int flags = args[1];
+
+  if (args.Return >= 0) {
+    const fs::path path = "/proc/" + std::to_string(args.PID) + "/fd/";
+    proc->MapFd(fds[0], path / std::to_string(fds[0]));
+    proc->MapFd(fds[1], path / std::to_string(fds[1]));
+
+    if (flags & O_CLOEXEC) {
+      proc->ClearCloseExec(fds[0]);
+      proc->ClearCloseExec(fds[1]);
+    } else {
+      proc->SetCloseExec(fds[0]);
+      proc->SetCloseExec(fds[1]);
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
 static void sys_ignore(Process *proc, const Args &args)
 {
 }
@@ -376,6 +398,7 @@ static const HandlerFn kHandlers[] =
   /* 0x118 */ [SYS_utimensat         ] = sys_ignore,
   /* 0x122 */ [SYS_eventfd2          ] = sys_ignore,
   /* 0x123 */ [SYS_epoll_create1     ] = sys_ignore,
+  /* 0x125 */ [SYS_pipe2             ] = sys_pipe,
   /* 0x12E */ [SYS_prlimit64         ] = sys_ignore,
 };
 
