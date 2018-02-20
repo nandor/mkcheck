@@ -27,18 +27,16 @@ static void sys_open(Process *proc, const Args &args)
   const int fd = args.Return;
 
   if (args.Return >= 0) {
-    proc->MapFd(args.Return, path);
-
     if ((flags & O_WRONLY) || (flags & O_RDWR) || (flags & O_CREAT)) {
-      proc->AddOutput(path);
+      proc->AddOutput(fd, path);
     } else {
-      proc->AddInput(path);
+      proc->AddInput(fd, path);
     }
 
     if (flags & O_CLOEXEC) {
-      proc->ClearCloseExec(fd);
-    } else {
       proc->SetCloseExec(fd);
+    } else {
+      proc->ClearCloseExec(fd);
     }
   }
 }
@@ -101,9 +99,7 @@ static void sys_pipe(Process *proc, const Args &args)
   ReadBuffer(args.PID, fds, args[0], 2 * sizeof(int));
 
   if (args.Return >= 0) {
-    const fs::path path = "/proc/" + std::to_string(args.PID) + "/fd/";
-    proc->MapFd(fds[0], path / std::to_string(fds[0]));
-    proc->MapFd(fds[1], path / std::to_string(fds[1]));
+    proc->Pipe(fds[0], fds[1]);
   }
 }
 
@@ -127,9 +123,9 @@ static void sys_fcntl(Process *proc, const Args &args)
       case F_SETFD: {
         const int arg = args[2];
         if (arg & O_CLOEXEC) {
-          proc->ClearCloseExec(fd);
-        } else {
           proc->SetCloseExec(fd);
+        } else {
+        proc->ClearCloseExec(fd);
         }
         break;
       }
@@ -265,18 +261,16 @@ static void sys_openat(Process *proc, const Args &args)
   if (args.Return >= 0) {
     const int fd = args.Return;
 
-    proc->MapFd(fd, path);
-
     if ((flags & O_WRONLY) || (flags & O_RDWR) || (flags & O_CREAT)) {
-      proc->AddOutput(path);
+      proc->AddOutput(fd, path);
     } else {
-      proc->AddInput(path);
+      proc->AddInput(fd, path);
     }
 
     if (flags & O_CLOEXEC) {
-      proc->ClearCloseExec(fd);
-    } else {
       proc->SetCloseExec(fd);
+    } else {
+      proc->ClearCloseExec(fd);
     }
   }
 }
@@ -300,16 +294,14 @@ static void sys_pipe2(Process *proc, const Args &args)
   const int flags = args[1];
 
   if (args.Return >= 0) {
-    const fs::path path = "/proc/" + std::to_string(args.PID) + "/fd/";
-    proc->MapFd(fds[0], path / std::to_string(fds[0]));
-    proc->MapFd(fds[1], path / std::to_string(fds[1]));
+    proc->Pipe(fds[0], fds[1]);
 
     if (flags & O_CLOEXEC) {
-      proc->ClearCloseExec(fds[0]);
-      proc->ClearCloseExec(fds[1]);
-    } else {
       proc->SetCloseExec(fds[0]);
       proc->SetCloseExec(fds[1]);
+    } else {
+      proc->ClearCloseExec(fds[0]);
+      proc->ClearCloseExec(fds[1]);
     }
   }
 }
@@ -415,9 +407,11 @@ static const HandlerFn kHandlers[] =
   /* 0x0E4 */ [SYS_clock_gettime     ] = sys_ignore,
   /* 0x0E5 */ [SYS_clock_getres      ] = sys_ignore,
   /* 0x0E7 */ [SYS_exit_group        ] = sys_ignore,
+  /* 0x0EB */ [SYS_utimes            ] = sys_ignore,
   /* 0x101 */ [SYS_openat            ] = sys_openat,
   /* 0x106 */ [SYS_newfstatat        ] = sys_ignore,
   /* 0x107 */ [SYS_unlinkat          ] = sys_unlinkat,
+  /* 0x10C */ [SYS_fchmodat          ] = sys_ignore,
   /* 0x10D */ [SYS_faccessat         ] = sys_faccessat,
   /* 0x10F */ [SYS_ppoll             ] = sys_ignore,
   /* 0x111 */ [SYS_set_robust_list   ] = sys_ignore,
@@ -427,6 +421,7 @@ static const HandlerFn kHandlers[] =
   /* 0x123 */ [SYS_epoll_create1     ] = sys_ignore,
   /* 0x125 */ [SYS_pipe2             ] = sys_pipe,
   /* 0x12E */ [SYS_prlimit64         ] = sys_ignore,
+  /* 0x13E */ [SYS_getrandom         ] = sys_ignore,
 };
 
 // -----------------------------------------------------------------------------

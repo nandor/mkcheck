@@ -28,19 +28,24 @@ struct FDInfo {
   fs::path Path;
   /// Close-On-Exec flag.
   bool CloseExec;
+  /// Indicates if the FD is an output.
+  bool IsOutput;
 
-  /// Constructs a file descriptor info object.
-  FDInfo(int fd, bool closeExec)
-    : Fd(fd)
-    , CloseExec(closeExec)
+  /// Constructs an empty file descriptor.
+  FDInfo()
+    : Fd(0)
+    , Path("/dev/null")
+    , CloseExec(false)
+    , IsOutput(false)
   {
   }
 
   /// Constructs a file descriptor info object.
-  FDInfo(int fd, const fs::path &path, bool closeExec)
+  FDInfo(int fd, const fs::path &path, bool closeExec, bool isOutput)
     : Fd(fd)
     , Path(path)
     , CloseExec(closeExec)
+    , IsOutput(isOutput)
   {
   }
 };
@@ -95,6 +100,21 @@ public:
   void AddInput(const fs::path &path);
   /// Adds an output file to a process.
   void AddOutput(const fs::path &path);
+
+  /// Adds an input file to a process.
+  void AddInput(int fd, const fs::path &path)
+  {
+    MapFd(fd, path, false);
+    AddInput(path);
+  }
+
+  /// Adds an output file to a process.
+  void AddOutput(int fd, const fs::path &path)
+  {
+    MapFd(fd, path, true);
+    AddOutput(path);
+  }
+
   /// Adds a destination path as an input.
   void AddDestination(const fs::path &path);
   /// Sets the working directory.
@@ -106,12 +126,13 @@ public:
   /// Creates a symlink.
   void Symlink(const fs::path &target, const fs::path &linkpath);
 
-  /// Maps a file descriptor to a path.
-  void MapFd(int fd, const fs::path &path);
   /// Returns the path to a file opened by a descriptor.
   fs::path GetFd(int fd);
   /// Duplicates a file descriptor.
   void DupFd(int from, int to);
+
+  /// Sets up a pipe.
+  void Pipe(int rd, int wr);
 
   /// Adds a file descriptor to the cloexec set.
   void SetCloseExec(int fd);
@@ -124,6 +145,9 @@ public:
   FDSet GetInheritedFDs();
 
 private:
+  /// Maps a file descriptor to a path.
+  void MapFd(int fd, const fs::path &path, bool output);
+
   /// Pointer to the trace.
   Trace *trace_;
   /// Process identifier.

@@ -16,7 +16,11 @@ projectPath = os.path.abspath(os.path.join(scriptPath, os.pardir, os.pardir))
 toolPath = os.path.join(projectPath, 'build/mkcheck')
 buildPath = os.getcwd()
 
-TOOL = 'make'
+BUILD = [ "make", "-j1" ]
+CLEAN = [ "make", "clean" ]
+
+#BUILD = [ "python", "setup.py", "build" ]
+#CLEAN = [ "git", "clean", "-xdf" ]
 
 # TODO: make this an actual temporary folder
 tmpPath = '/tmp/mkcheck'
@@ -25,13 +29,13 @@ tmpPath = '/tmp/mkcheck'
 run_proc([ 'ninja' ], cwd=os.path.join(projectPath, 'build'))
 
 # Run a clean build.
-run_proc([ TOOL, "clean" ], cwd=buildPath)
+run_proc(CLEAN, cwd=buildPath)
 
 # Run the build with mkcheck.
-#run_proc(
-#  [ toolPath, "--output={0}".format(tmpPath), "--", TOOL, "-j1" ],
-#  cwd=buildPath
-#)
+run_proc(
+  [ toolPath, "--output={0}".format(tmpPath), "--" ] + BUILD,
+  cwd=buildPath
+)
 
 # Find the set of inputs and outputs, as well as the graph.
 inputs, outputs = parse_files(tmpPath)
@@ -51,7 +55,7 @@ for idx, input in zip(range(count), fuzzed):
     # Touch the file.
     os.utime(input, None)
     # Run the incremental build.
-    run_proc([ TOOL ], cwd=buildPath)
+    run_proc(BUILD, cwd=buildPath)
 
     t1 = read_mtimes(outputs)
 
@@ -79,8 +83,8 @@ for idx, input in zip(range(count), fuzzed):
                 print '  -', f
 
         if under:
-            run_proc([ TOOL, "clean" ], cwd=buildPath)
-            run_proc([ TOOL ], cwd=buildPath)
+            run_proc(CLEAN, cwd=buildPath)
+            run_proc(BUILD, cwd=buildPath)
             t1 = read_mtimes(outputs)
 
     t0 = t1

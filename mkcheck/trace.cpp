@@ -33,6 +33,17 @@ Process::Process(
   , isCOW_(isCOW)
 {
   for (const auto &fd : fdSet) {
+    // open disables O_CLOEXEC by default, meaning that most processes leak
+    // children to child processses, as it happens in the case of GCC.
+    // To avoid cycles, only stdin and stdout and stderr are tracked.
+    if (fd.Fd < 3) {
+      if (fd.IsOutput) {
+        outputs_.insert(trace_->Find(fd.Path));
+      } else {
+        inputs_.insert(trace_->Find(fd.Path));
+      }
+    }
+
     files_.emplace(fd.Fd, fd);
   }
 }
@@ -66,16 +77,9 @@ void Process::Dump(std::ostream &os)
 
   // Dump input files.
   os << "  \"input\": [";
-  std::vector<int64_t> inputs;
-  for (const auto input : inputs_) {
-    if (outputs_.find(input) == outputs_.end()) {
-      inputs.push_back(input);
-    }
-  }
-
-  for (auto it = inputs.begin(); it != inputs.end();) {
+  for (auto it = inputs_.begin(); it != inputs_.end();) {
     os << *it;
-    if (++it != inputs.end()) {
+    if (++it != inputs_.end()) {
       os << ",";
     }
   }
@@ -171,9 +175,9 @@ void Process::Symlink(const fs::path &target, const fs::path &linkpath)
 }
 
 // -----------------------------------------------------------------------------
-void Process::MapFd(int fd, const fs::path &path)
+void Process::MapFd(int fd, const fs::path &path, bool output)
 {
-  FDInfo info(fd, path, false);
+  FDInfo info(fd, path, false, output);
 
   auto it = files_.find(fd);
   if (it == files_.end()) {
@@ -205,7 +209,8 @@ void Process::DupFd(int from, int to)
     );
   }
 
-  FDInfo info(to, it->second.Path, false);
+  const auto &oldInfo = it->second;
+  FDInfo info(to, oldInfo.Path, false, oldInfo.IsOutput);
 
   auto jt = files_.find(to);
   if (jt == files_.end()) {
@@ -213,6 +218,18 @@ void Process::DupFd(int from, int to)
   } else {
     jt->second = info;
   }
+}
+
+// -----------------------------------------------------------------------------
+void Process::Pipe(int rd, int wr)
+{
+  const fs::path path = "/proc/" + std::to_string(pid_) + "/fd/";
+  const auto pipeRd = path / std::to_string(rd);
+  const auto pipeWr = path / std::to_string(wr);
+
+  trace_->AddDependency(pipeWr, pipeRd);
+  AddInput(rd, pipeRd);
+  AddOutput(wr, pipeWr);
 }
 
 // -----------------------------------------------------------------------------
@@ -246,7 +263,7 @@ FDSet Process::GetAllFDs()
 {
   FDSet fdSet;
   for (const auto &file : files_) {
-    fdSet.emplace_back(file.second);
+    fdSet.push_back(file.second);
   }
   return fdSet;
 }
@@ -255,10 +272,10 @@ FDSet Process::GetAllFDs()
 FDSet Process::GetInheritedFDs()
 {
   FDSet fdSet;
-  for (auto &file : files_) {
-    const auto info = file.second;
+  for (const auto &file : files_) {
+    const auto &info = file.second;
     if (!info.CloseExec) {
-      fdSet.emplace_back(info);
+      fdSet.push_back(info);
     }
   }
   return fdSet;
@@ -352,9 +369,9 @@ void Trace::SpawnTrace(pid_t parent, pid_t pid)
       image = 0;
       parentUID = 0;
 
-      fdSet.emplace_back(0, "/dev/stdin", false);
-      fdSet.emplace_back(1, "/dev/stdout", false);
-      fdSet.emplace_back(2, "/dev/stderr", false);
+      fdSet.emplace_back(0, "/dev/stdin", false, false);
+      fdSet.emplace_back(1, "/dev/stdout", false, true);
+      fdSet.emplace_back(2, "/dev/stderr", false, true);
     } else {
       auto proc = it->second;
       cwd = proc->GetCwd();
