@@ -4,9 +4,12 @@
 
 import os
 import subprocess
+import sys
 
 
 def run_proc(*args, **kwargs):
+    sys.stdout.flush()
+
     proc = subprocess.Popen(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -17,4 +20,5 @@ def run_proc(*args, **kwargs):
     if proc.returncode != 0:
         print stdout
         print stderr
-        raise Exception('Command failed')
+        sys.stdout.flush()
+        raise Exception('Command failed: ' + str(proc.returncode))

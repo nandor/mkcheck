@@ -228,6 +228,23 @@ static void sys_readlink(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_getxattr(Process *proc, const Args &args)
+{
+  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
+  if (args.Return >= 0) {
+      proc->AddInput(path);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_fsetxattr(Process *proc, const Args &args)
+{
+  if (args.Return >= 0) {
+    proc->AddOutput(proc->GetFd(args[0]));
+  }
+}
+
+// -----------------------------------------------------------------------------
 static void sys_unlinkat(Process *proc, const Args &args)
 {
   const int fd = args[0];
@@ -325,6 +342,7 @@ static const HandlerFn kHandlers[] =
   /* 0x010 */ [SYS_ioctl             ] = sys_ignore,
   /* 0x011 */ [SYS_pread64           ] = sys_ignore,
   /* 0x013 */ [SYS_readv             ] = sys_ignore,
+  /* 0x014 */ [SYS_writev            ] = sys_ignore,
   /* 0x015 */ [SYS_access            ] = sys_access,
   /* 0x016 */ [SYS_pipe              ] = sys_pipe,
   /* 0x017 */ [SYS_select            ] = sys_ignore,
@@ -374,9 +392,11 @@ static const HandlerFn kHandlers[] =
   /* 0x068 */ [SYS_getgid            ] = sys_ignore,
   /* 0x06B */ [SYS_geteuid           ] = sys_ignore,
   /* 0x06C */ [SYS_getegid           ] = sys_ignore,
+  /* 0x06D */ [SYS_setpgid           ] = sys_ignore,
   /* 0x06E */ [SYS_getppid           ] = sys_ignore,
   /* 0x06F */ [SYS_getpgrp           ] = sys_ignore,
   /* 0x073 */ [SYS_getgroups         ] = sys_ignore,
+  /* 0x07F */ [SYS_rt_sigpending     ] = sys_ignore,
   /* 0x083 */ [SYS_sigaltstack       ] = sys_ignore,
   /* 0x089 */ [SYS_statfs            ] = sys_ignore,
   /* 0x08A */ [SYS_fstatfs           ] = sys_ignore,
@@ -384,18 +404,22 @@ static const HandlerFn kHandlers[] =
   /* 0x09E */ [SYS_arch_prctl        ] = sys_ignore,
   /* 0x0A0 */ [SYS_setrlimit         ] = sys_ignore,
   /* 0x0BA */ [SYS_gettid            ] = sys_ignore,
+  /* 0x0BE */ [SYS_fsetxattr         ] = sys_fsetxattr,
+  /* 0x0BF */ [SYS_getxattr          ] = sys_getxattr,
   /* 0x0C0 */ [SYS_lgetxattr         ] = sys_ignore,
   /* 0x0CA */ [SYS_futex             ] = sys_ignore,
   /* 0x0CB */ [SYS_sched_setaffinity ] = sys_ignore,
   /* 0x0CC */ [SYS_sched_getaffinity ] = sys_ignore,
   /* 0x0DA */ [SYS_set_tid_address   ] = sys_ignore,
   /* 0x0DD */ [SYS_fadvise64         ] = sys_ignore,
+  /* 0x0E4 */ [SYS_clock_gettime     ] = sys_ignore,
   /* 0x0E5 */ [SYS_clock_getres      ] = sys_ignore,
   /* 0x0E7 */ [SYS_exit_group        ] = sys_ignore,
   /* 0x101 */ [SYS_openat            ] = sys_openat,
   /* 0x106 */ [SYS_newfstatat        ] = sys_ignore,
   /* 0x107 */ [SYS_unlinkat          ] = sys_unlinkat,
   /* 0x10D */ [SYS_faccessat         ] = sys_faccessat,
+  /* 0x10F */ [SYS_ppoll             ] = sys_ignore,
   /* 0x111 */ [SYS_set_robust_list   ] = sys_ignore,
   /* 0x113 */ [SYS_splice            ] = sys_ignore,
   /* 0x118 */ [SYS_utimensat         ] = sys_ignore,

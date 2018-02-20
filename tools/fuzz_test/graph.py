@@ -88,6 +88,8 @@ def parse_files(path):
         if not files[uid].get('exists', False):
             return False
         name = files[uid]['name']
+        if name.startswith('/dev') or name.startswith('/proc'):
+            return False
         return os.path.exists(name) and not os.path.isdir(name)
 
     inputs = {files[uid]['name'] for uid in inputs if persisted(uid)}

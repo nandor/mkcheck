@@ -16,39 +16,42 @@ projectPath = os.path.abspath(os.path.join(scriptPath, os.pardir, os.pardir))
 toolPath = os.path.join(projectPath, 'build/mkcheck')
 buildPath = os.getcwd()
 
+TOOL = 'make'
+
 # TODO: make this an actual temporary folder
 tmpPath = '/tmp/mkcheck'
 
 # Build mkcheck.
-run_proc([ "ninja" ], cwd=os.path.join(projectPath, 'build'))
+run_proc([ 'ninja' ], cwd=os.path.join(projectPath, 'build'))
 
 # Run a clean build.
-run_proc([ "make", "clean" ], cwd=buildPath)
+run_proc([ TOOL, "clean" ], cwd=buildPath)
 
 # Run the build with mkcheck.
-run_proc(
-  [ toolPath, "--output={0}".format(tmpPath), "--", "make", "-j1" ],
-  cwd=buildPath
-)
+#run_proc(
+#  [ toolPath, "--output={0}".format(tmpPath), "--", TOOL, "-j1" ],
+#  cwd=buildPath
+#)
 
 # Find the set of inputs and outputs, as well as the graph.
 inputs, outputs = parse_files(tmpPath)
 graph = parse_graph(tmpPath)
 t0 = read_mtimes(outputs)
 
-for input in inputs:
+fuzzed = [f for f in inputs - outputs if os.access(f, os.W_OK)]
+count = len(fuzzed)
+
+for idx, input in zip(range(count), fuzzed):
     # Only care about the file if the user has write access to it.
     if not os.access(input, os.W_OK):
         continue
-    if input.startswith('/dev'):
-        continue
 
-    print input, ': '
+    print '[{0}/{1}] {2}:'.format(idx + 1, count, input)
 
     # Touch the file.
     os.utime(input, None)
     # Run the incremental build.
-    run_proc([ "make" ], cwd=buildPath)
+    run_proc([ TOOL ], cwd=buildPath)
 
     t1 = read_mtimes(outputs)
 
@@ -63,11 +66,21 @@ for input in inputs:
 
     # Report differences.
     if modified != expected:
+        over = False
+        under = False
         for f in modified:
             if f not in expected:
+                over = True
                 print '  +', f
+
         for f in expected:
             if f not in modified:
+                under = True
                 print '  -', f
+
+        if under:
+            run_proc([ TOOL, "clean" ], cwd=buildPath)
+            run_proc([ TOOL ], cwd=buildPath)
+            t1 = read_mtimes(outputs)
 
     t0 = t1
