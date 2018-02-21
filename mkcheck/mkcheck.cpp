@@ -171,8 +171,6 @@ int RunChild(const std::string &exec, const std::vector<char *> &args)
 // -----------------------------------------------------------------------------
 static constexpr int kTraceOptions
   = PTRACE_O_TRACESYSGOOD
-  | PTRACE_O_TRACEEXEC
-  | PTRACE_O_TRACEEXIT
   | PTRACE_O_TRACECLONE
   | PTRACE_O_TRACEFORK
   | PTRACE_O_TRACEVFORK
@@ -194,19 +192,28 @@ int RunTracer(Trace *trace, pid_t pid)
   // Candidate processses to be started.
   std::unordered_map<pid_t, pid_t> candidates;
 
+  // Process to wait for - after clone/vfork/exec, the callee is given
+  // priority in order to trap and set up the child's data structure.
+  // Otherwise, it is -1, stopping the first available child.
+  pid_t waitFor = -1;
+
   // Keep tracking syscalls while any process in the hierarchy is running.
   int restart_sig = 0;
   while (!tracked.empty()) {
+    // Trap a child on the next syscall.
     if (pid > 0) {
       if (ptrace(PTRACE_SYSCALL, pid, 0, restart_sig) < 0) {
         throw std::runtime_error("ptrace failed");
       }
     }
 
-    if ((pid = wait3(&status, __WALL, 0)) < 0) {
-      throw std::runtime_error("wait3 failed");
+    // Wait for a child or any children to stop.
+    if ((pid = waitpid(waitFor, &status, 0)) < 0) {
+      throw std::runtime_error("waitpid failed");
     }
+    waitFor = -1;
 
+    // Remove the process from the tracked ones on exit.
     if (WIFEXITED(status) || WIFSIGNALED(status)) {
       trace->EndTrace(pid);
       tracked.erase(pid);
@@ -214,6 +221,7 @@ int RunTracer(Trace *trace, pid_t pid)
       continue;
     }
 
+    /// Handle signals dispatched to children.
     switch (int sig = WSTOPSIG(status)) {
       case SIGTRAP | 0x80: {
         // By setting PTRACE_O_TRACESYSGOOD, bit 7 of the system call
@@ -232,7 +240,6 @@ int RunTracer(Trace *trace, pid_t pid)
             // Get the ID of the child process.
             pid_t child;
             ptrace(PTRACE_GETEVENTMSG, pid, 0, &child);
-
             // Start tracking it.
             candidates[child] = pid;
             restart_sig = 0;
@@ -251,7 +258,7 @@ int RunTracer(Trace *trace, pid_t pid)
         auto it = candidates.find(pid);
         if (it != candidates.end()) {
           restart_sig = 0;
-          tracked[pid] = std::make_shared<ProcessState>(pid);
+          tracked.emplace(pid, std::make_shared<ProcessState>(pid));
           trace->SpawnTrace(it->second, pid);
           candidates.erase(it);
         } else {
@@ -283,15 +290,24 @@ int RunTracer(Trace *trace, pid_t pid)
 
     // Handle the system call.
     auto sno = state->GetSyscall();
-    if (sno == SYS_execve) {
-      // Execve is special since its arguments can't be read once the
-      // process image is replaced, thus the argument is read on entry.
-      if (state->IsExiting()) {
-        if (state->GetReturn() >= 0) {
-          trace->StartTrace(pid, state->GetExecutable());
+    switch (sno) {
+      case SYS_execve: {
+        // Execve is special since its arguments can't be read once the
+        // process image is replaced, thus the argument is read on entry.
+        if (state->IsExiting()) {
+          if (state->GetReturn() >= 0) {
+            trace->StartTrace(pid, state->GetExecutable());
+          }
+        } else {
+          state->SetExecutable(ReadString(pid, state->GetArg(0)));
         }
-      } else {
-        state->SetExecutable(ReadString(pid, state->GetArg(0)));
+        break;
+      }
+      case SYS_clone:
+      case SYS_vfork:
+      case SYS_fork: {
+        waitFor = pid;
+        break;
       }
     }
 

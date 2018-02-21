@@ -9,3 +9,4 @@ tools/viewer/package.lock.json
 tools/viewer/dist/bundle.js
 tools/viewer/dist/data
 node_modules
+*.swp
