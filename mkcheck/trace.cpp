@@ -105,7 +105,7 @@ fs::path Process::Normalise(int fd, const fs::path &path)
     if (fd == AT_FDCWD) {
       fullPath = (cwd_ / path).normalize();
     } else {
-      throw std::runtime_error("Not implemented: realpath");
+      return (GetFd(fd) / path).normalize();
     }
   } else {
     fullPath = path;

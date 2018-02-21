@@ -233,6 +233,20 @@ static void sys_getxattr(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_linkat(Process *proc, const Args &args)
+{
+  if (args.Return >= 0) {
+    const fs::path srcRel = ReadString(args.PID, args[1]);
+    const fs::path dstRel = ReadString(args.PID, args[3]);
+
+    const fs::path src = proc->Normalise(args[0], srcRel);
+    const fs::path dstParent = proc->Normalise(args[2], dstRel.parent_path());
+
+    proc->Symlink(src, dstParent / dstRel.filename());
+  }
+}
+
+// -----------------------------------------------------------------------------
 static void sys_fsetxattr(Process *proc, const Args &args)
 {
   if (args.Return >= 0) {
@@ -395,6 +409,7 @@ static const HandlerFn kHandlers[] =
   /* 0x09D */ [SYS_prctl             ] = sys_ignore,
   /* 0x09E */ [SYS_arch_prctl        ] = sys_ignore,
   /* 0x0A0 */ [SYS_setrlimit         ] = sys_ignore,
+  /* 0x0A5 */ [SYS_linkat            ] = sys_linkat,
   /* 0x0BA */ [SYS_gettid            ] = sys_ignore,
   /* 0x0BE */ [SYS_fsetxattr         ] = sys_fsetxattr,
   /* 0x0BF */ [SYS_getxattr          ] = sys_getxattr,
