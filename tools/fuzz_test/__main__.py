@@ -27,7 +27,7 @@ class Project(object):
 
         if not os.access(f, os.W_OK):
             return False
-        if file == TOOL_PATH:
+        if f == TOOL_PATH:
             return False
         return True
 
@@ -58,7 +58,7 @@ class CMakeProject(Project):
     def clean(self):
         """Cleans the project."""
 
-        run_proc(self.CLEAN)
+        run_proc(self.CLEAN, cwd=self.buildPath)
 
     def build(self):
         """Performs an incremental build."""
@@ -70,9 +70,17 @@ class CMakeProject(Project):
 
         if not super(CMakeProject, self).filter(f):
             return False
-        name, ext = os.path.splitext(f)
-        if name.startswith(self.buildPath):
+
+        if f.startswith(self.buildPath):
             return False
+        for ending in ['.h', '.cpp', '.cmake', '.cmake.in']:
+            if f.endswith(ending):
+                return False
+
+        name = os.path.basename(f)
+        if name in ['CMakeLists.txt']:
+            return False
+
         return True
 
 
@@ -106,8 +114,6 @@ def build_tool():
 def fuzz_test(project, files):
     """Find the set of inputs and outputs, as well as the graph."""
 
-    #project.clean_build()
-
     inputs, outputs = parse_files(project.tmpPath)
     graph = parse_graph(project.tmpPath)
     t0 = read_mtimes(outputs)
@@ -119,10 +125,6 @@ def fuzz_test(project, files):
 
     count = len(fuzzed)
     for idx, input in zip(range(count), fuzzed):
-        # Only care about the file if the user has write access to it.
-        if not os.access(input, os.W_OK):
-            continue
-
         print '[{0}/{1}] {2}:'.format(idx + 1, count, input)
 
         # Touch the file.
@@ -184,6 +186,22 @@ def query(project, files):
             print '  ', dep
 
 
+def list_files(project, files):
+    """Lists the files in the project to be fuzzed."""
+
+    inputs, outputs = parse_files(project.tmpPath)
+    graph = parse_graph(project.tmpPath)
+
+    if len(files) == 0:
+        fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
+    else:
+        fuzzed = [os.path.abspath(f) for f in files]
+
+    count = len(fuzzed)
+    for idx, input in zip(range(count), fuzzed):
+        print input
+
+
 def get_project(root, args):
     """Identifies the type of the project."""
     if os.path.isfile(os.path.join(root, 'CMakeLists.txt')):
@@ -225,11 +243,17 @@ def main():
 
     build_tool()
 
+    if args.cmd == 'build':
+        project.clean_build()
+        return
     if args.cmd == 'fuzz':
         fuzz_test(project, args.files)
         return
     if args.cmd == 'query':
         query(project, args.files)
+        return
+    if args.cmd == 'list':
+        list_files(project, args.files)
         return
 
     raise RuntimeError('Unknown command: ' + args.cmd)
