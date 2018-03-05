@@ -42,7 +42,7 @@ inputs, outputs = parse_files(tmpPath)
 graph = parse_graph(tmpPath)
 t0 = read_mtimes(outputs)
 
-fuzzed = [f for f in inputs - outputs if os.access(f, os.W_OK)]
+fuzzed = sorted([f for f in inputs - outputs if os.access(f, os.W_OK)])
 count = len(fuzzed)
 
 for idx, input in zip(range(count), fuzzed):

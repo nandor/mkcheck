@@ -42,10 +42,12 @@ def parse_graph(path):
     """Constructs the dependency graph based on files."""
 
     # Find all files.
-    with open(os.path.join(path, 'files'), 'r') as f:
-        files = {}
-        for file in json.loads(f.read()):
-            files[file['id']] = file
+    with open(path, 'r') as f:
+        data = json.loads(f.read())
+
+    files = {}
+    for file in data["files"]:
+        files[file['id']] = file
 
     graph = DependencyGraph()
 
@@ -53,14 +55,13 @@ def parse_graph(path):
         for dep in file.get('deps', []):
             graph.add_dependency(files[dep]['name'], files[uid]['name'])
 
-    with open(os.path.join(path, 'procs'), 'r') as p:
-        for proc in json.loads(p.read()):
-            for input in proc.get('input', []):
-                for output in proc.get('output', []):
-                    graph.add_dependency(
-                        files[input]['name'],
-                        files[output]['name']
-                    )
+    for proc in data["procs"]:
+        for input in proc.get('input', []):
+            for output in proc.get('output', []):
+                graph.add_dependency(
+                    files[input]['name'],
+                    files[output]['name']
+                )
 
     return graph
 
@@ -68,17 +69,15 @@ def parse_graph(path):
 def parse_files(path):
     """Finds files written and read during a clean build."""
 
-    # Find all files.
-    with open(os.path.join(path, 'files'), 'r') as f:
-        files = {}
-        for file in json.loads(f.read()):
-            files[file['id']] = file
-
-    # For each process, find the outputs.
+    # Find all files and processes.
+    files = {}
     inputs = set()
     outputs = set()
-    with open(os.path.join(path, 'procs'), 'r') as p:
-        for proc in json.loads(p.read()):
+    with open(path, 'r') as f:
+        data = json.loads(f.read())
+        for file in data["files"]:
+            files[file['id']] = file
+        for proc in data["procs"]:
             inputs = inputs | set(proc.get('input', []))
             outputs = outputs | set(proc.get('output', []))
 

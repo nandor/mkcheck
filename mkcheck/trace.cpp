@@ -56,7 +56,7 @@ Process::~Process()
 // -----------------------------------------------------------------------------
 void Process::Dump(std::ostream &os)
 {
-  os << "{";
+  os << "{" << std::endl;
   os << "  \"uid\": " << uid_ << "," << std::endl;
   os << "  \"parent\": " << parent_ << "," << std::endl;
   os << "  \"image\": " << image_ << "," << std::endl;
@@ -287,21 +287,17 @@ Trace::Trace(const fs::path &output)
   , nextUID_(1)
   , nextFID_(1)
 {
-  if (fs::exists(output)) {
-    fs::remove_all(output);
-  }
-  if (!fs::create_directories(output)) {
-    throw std::runtime_error("Cannot create directory.");
-  }
 }
 
 // -----------------------------------------------------------------------------
 Trace::~Trace()
 {
+  std::ofstream os(output_.string());
+
   // Save the list of files.
+  os << "{" << std::endl;
   {
-    std::ofstream os((output_ / "files").string());
-    os << "[";
+    os << "\"files\": [" << std::endl;
     for (auto it = fileInfos_.begin(); it != fileInfos_.end();) {
       const auto &info = it->second;
       os << "{";
@@ -325,10 +321,10 @@ Trace::~Trace()
       }
       os << "}";
       if (++it != fileInfos_.end()) {
-        os << ",\n";
+        os << "," << std::endl;
       }
     }
-    os << "]";
+    os << "]," << std::endl;
   }
 
   // Save the list of processes.
@@ -340,16 +336,16 @@ Trace::~Trace()
       }
     }
 
-    std::ofstream os((output_ / "procs").string());
-    os << "[";
+    os << "\"procs\": [" << std::endl;
     for (auto it = procs.begin(); it != procs.end();) {
       (*it)->Dump(os);
       if (++it != procs.end()) {
         os << ",";
       }
     }
-    os << "]";
+    os << "]" << std::endl;
   }
+  os << "}" << std::endl;
 }
 
 // -----------------------------------------------------------------------------
