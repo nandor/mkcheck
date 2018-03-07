@@ -213,7 +213,7 @@ static void sys_symlink(Process *proc, const Args &args)
     const fs::path parent = proc->Normalise(dst.parent_path());
     const fs::path srcPath = proc->Normalise(src, parent);
     const fs::path dstPath = parent / dst.filename();
-    
+
     // configure seems to create links pointing to themselves, which we ignore.
     if (srcPath != dstPath) {
       proc->Link(srcPath, dstPath);
@@ -315,6 +315,24 @@ static void sys_faccessat(Process *proc, const Args &args)
 
   if (args.Return >= 0) {
     proc->AddInput(path);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_dup3(Process *proc, const Args &args)
+{
+  const int oldfd = args[0];
+  const int newfd = args[1];
+  const int flags = args[2];
+
+  if (args.Return >= 0) {
+    proc->DupFd(oldfd, newfd);
+  }
+
+  if (flags & O_CLOEXEC) {
+    proc->SetCloseExec(newfd);
+  } else {
+    proc->ClearCloseExec(newfd);
   }
 }
 
@@ -458,6 +476,7 @@ static const HandlerFn kHandlers[] =
   /* 0x118 */ [SYS_utimensat         ] = sys_ignore,
   /* 0x122 */ [SYS_eventfd2          ] = sys_ignore,
   /* 0x123 */ [SYS_epoll_create1     ] = sys_ignore,
+  /* 0x124 */ [SYS_dup3              ] = sys_dup3,
   /* 0x125 */ [SYS_pipe2             ] = sys_pipe,
   /* 0x12E */ [SYS_prlimit64         ] = sys_ignore,
   /* 0x133 */ [SYS_sendmmsg          ] = sys_ignore,
