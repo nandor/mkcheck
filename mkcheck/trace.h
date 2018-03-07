@@ -93,8 +93,12 @@ public:
 
   /// Resolves a path, relative to the cwd.
   fs::path Normalise(const fs::path &path);
+  /// Resolves a path, given cwd.
+  fs::path Normalise(const fs::path &path, const fs::path &cwd);
   /// Resolves a path, relative to any directory.
   fs::path Normalise(int fd, const fs::path &path);
+  /// Resolves a path, relative to any directory, given a cwd.
+  fs::path Normalise(int fd, const fs::path &path, const fs::path &cwd);
 
   /// Adds an input file to a process.
   void AddInput(const fs::path &path);
@@ -124,7 +128,7 @@ public:
   /// Renames a file.
   void Rename(const fs::path &from, const fs::path &to);
   /// Creates a symlink.
-  void Symlink(const fs::path &target, const fs::path &linkpath);
+  void Link(const fs::path &target, const fs::path &linkpath);
 
   /// Returns the path to a file opened by a descriptor.
   fs::path GetFd(int fd);

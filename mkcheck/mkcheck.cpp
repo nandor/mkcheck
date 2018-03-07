@@ -174,6 +174,7 @@ static constexpr int kTraceOptions
   | PTRACE_O_TRACECLONE
   | PTRACE_O_TRACEFORK
   | PTRACE_O_TRACEVFORK
+  | PTRACE_O_EXITKILL
   ;
 
 // -----------------------------------------------------------------------------
@@ -382,7 +383,6 @@ int main(int argc, char **argv)
       try {
         return RunTracer(trace.get(), pid);
       } catch (const std::exception &ex) {
-        kill(pid, SIGKILL);
         std::cerr << "[Exception] " << ex.what() << std::endl;
         return EXIT_FAILURE;
       }

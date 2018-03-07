@@ -91,11 +91,23 @@ void Process::Dump(std::ostream &os)
 // -----------------------------------------------------------------------------
 fs::path Process::Normalise(const fs::path &path)
 {
-  return Normalise(AT_FDCWD, path);
+  return Normalise(AT_FDCWD, path, cwd_);
+}
+
+// -----------------------------------------------------------------------------
+fs::path Process::Normalise(const fs::path &path, const fs::path &cwd)
+{
+  return Normalise(AT_FDCWD, path, cwd);
 }
 
 // -----------------------------------------------------------------------------
 fs::path Process::Normalise(int fd, const fs::path &path)
+{
+  return Normalise(fd, path, cwd_);
+}
+
+// -----------------------------------------------------------------------------
+fs::path Process::Normalise(int fd, const fs::path &path, const fs::path &cwd)
 {
   boost::system::error_code ec;
 
@@ -103,7 +115,7 @@ fs::path Process::Normalise(int fd, const fs::path &path)
   fs::path fullPath;
   if (path.is_relative()) {
     if (fd == AT_FDCWD) {
-      fullPath = (cwd_ / path).normalize();
+      fullPath = (cwd / path).normalize();
     } else {
       return (GetFd(fd) / path).normalize();
     }
@@ -167,7 +179,7 @@ void Process::Rename(const fs::path &from, const fs::path &to)
 }
 
 // -----------------------------------------------------------------------------
-void Process::Symlink(const fs::path &target, const fs::path &linkpath)
+void Process::Link(const fs::path &target, const fs::path &linkpath)
 {
   trace_->AddDependency(target, linkpath);
   trace_->Create(linkpath);

@@ -207,10 +207,17 @@ static void sys_unlink(Process *proc, const Args &args)
 static void sys_symlink(Process *proc, const Args &args)
 {
   if (args.Return >= 0) {
-    const fs::path src = proc->Normalise(ReadString(args.PID, args[0]));
+    const fs::path src = ReadString(args.PID, args[0]);
     const fs::path dst = ReadString(args.PID, args[1]);
 
-    proc->Symlink(src, proc->Normalise(dst.parent_path()) / dst.filename());
+    const fs::path parent = proc->Normalise(dst.parent_path());
+    const fs::path srcPath = proc->Normalise(src, parent);
+    const fs::path dstPath = parent / dst.filename();
+    
+    // configure seems to create links pointing to themselves, which we ignore.
+    if (srcPath != dstPath) {
+      proc->Link(srcPath, dstPath);
+    }
   }
 }
 
@@ -242,7 +249,7 @@ static void sys_linkat(Process *proc, const Args &args)
     const fs::path src = proc->Normalise(args[0], srcRel);
     const fs::path dstParent = proc->Normalise(args[2], dstRel.parent_path());
 
-    proc->Symlink(src, dstParent / dstRel.filename());
+    proc->Link(src, dstParent / dstRel.filename());
   }
 }
 
@@ -286,6 +293,17 @@ static void sys_openat(Process *proc, const Args &args)
     } else {
       proc->ClearCloseExec(fd);
     }
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_mkdirat(Process *proc, const Args &args)
+{
+  const int dirfd = args[0];
+  const fs::path path = proc->Normalise(dirfd, ReadString(args.PID, args[1]));
+
+  if (args.Return >= 0) {
+    proc->AddOutput(path);
   }
 }
 
@@ -424,6 +442,7 @@ static const HandlerFn kHandlers[] =
   /* 0x0E7 */ [SYS_exit_group        ] = sys_ignore,
   /* 0x0EB */ [SYS_utimes            ] = sys_ignore,
   /* 0x101 */ [SYS_openat            ] = sys_openat,
+  /* 0x102 */ [SYS_mkdirat           ] = sys_mkdirat,
   /* 0x106 */ [SYS_newfstatat        ] = sys_ignore,
   /* 0x107 */ [SYS_unlinkat          ] = sys_unlinkat,
   /* 0x10C */ [SYS_fchmodat          ] = sys_ignore,
