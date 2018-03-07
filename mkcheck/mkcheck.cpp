@@ -178,17 +178,20 @@ static constexpr int kTraceOptions
   ;
 
 // -----------------------------------------------------------------------------
-int RunTracer(Trace *trace, pid_t pid)
+int RunTracer(const fs::path &output, pid_t root)
 {
+  // Trace context.
+  auto trace = std::make_unique<Trace>();
+
   // Skip the first signal, which is SIGSTOP.
   int status;
-  waitpid(pid, &status, 0);
-  ptrace(PTRACE_SETOPTIONS, pid, nullptr, kTraceOptions);
-  trace->SpawnTrace(0, pid);
+  waitpid(root, &status, 0);
+  ptrace(PTRACE_SETOPTIONS, root, nullptr, kTraceOptions);
+  trace->SpawnTrace(0, root);
 
   // Set of tracked processses.
   std::unordered_map<pid_t, std::shared_ptr<ProcessState>> tracked;
-  tracked[pid] = std::make_shared<ProcessState>(pid);
+  tracked[root] = std::make_shared<ProcessState>(root);
 
   // Candidate processses to be started.
   std::unordered_map<pid_t, pid_t> candidates;
@@ -199,11 +202,12 @@ int RunTracer(Trace *trace, pid_t pid)
   pid_t waitFor = -1;
 
   // Keep tracking syscalls while any process in the hierarchy is running.
-  int restart_sig = 0;
+  int restartSig = 0;
+  pid_t pid = root;
   while (!tracked.empty()) {
     // Trap a child on the next syscall.
     if (pid > 0) {
-      if (ptrace(PTRACE_SYSCALL, pid, 0, restart_sig) < 0) {
+      if (ptrace(PTRACE_SYSCALL, pid, 0, restartSig) < 0) {
         throw std::runtime_error("ptrace failed");
       }
     }
@@ -213,7 +217,22 @@ int RunTracer(Trace *trace, pid_t pid)
       throw std::runtime_error("waitpid failed");
     }
     waitFor = -1;
+  
+    // The root process must exit with 0.
+    if (WIFEXITED(status) && pid == root) {
+      const int code = WEXITSTATUS(status);
+      if (code != 0) {
+        throw std::runtime_error("non-zero exit " + std::to_string(code)
+        );
+      }
+    }
 
+    // The root process should not exit with a signal.
+    if (WIFSIGNALED(status) && pid == root) {
+      const int signo = WTERMSIG(status);
+      throw std::runtime_error("killed by signal " + std::to_string(signo));
+    }
+    
     // Remove the process from the tracked ones on exit.
     if (WIFEXITED(status) || WIFSIGNALED(status)) {
       trace->EndTrace(pid);
@@ -228,7 +247,7 @@ int RunTracer(Trace *trace, pid_t pid)
         // By setting PTRACE_O_TRACESYSGOOD, bit 7 of the system call
         // number is set in order to distinguish system call traps
         // from other traps.
-        restart_sig = 0;
+        restartSig = 0;
         break;
       }
       case SIGTRAP: {
@@ -243,14 +262,14 @@ int RunTracer(Trace *trace, pid_t pid)
             ptrace(PTRACE_GETEVENTMSG, pid, 0, &child);
             // Start tracking it.
             candidates[child] = pid;
-            restart_sig = 0;
+            restartSig = 0;
             break;
           }
           default: {
             break;
           }
         }
-        restart_sig = 0;
+        restartSig = 0;
         continue;
       }
       case SIGSTOP: {
@@ -258,18 +277,18 @@ int RunTracer(Trace *trace, pid_t pid)
         // after the new process is started, deliver it otherwise.
         auto it = candidates.find(pid);
         if (it != candidates.end()) {
-          restart_sig = 0;
+          restartSig = 0;
           tracked.emplace(pid, std::make_shared<ProcessState>(pid));
           trace->SpawnTrace(it->second, pid);
           candidates.erase(it);
         } else {
-          restart_sig = SIGSTOP;
+          restartSig = SIGSTOP;
         }
         continue;
       }
       default: {
         // Deliver other signals to the process.
-        restart_sig = sig;
+        restartSig = sig;
         continue;
       }
     }
@@ -314,10 +333,11 @@ int RunTracer(Trace *trace, pid_t pid)
 
     // All other system calls are handled on exit.
     if (state->IsExiting()) {
-      Handle(trace, sno, state->GetArgs());
+      Handle(trace.get(), sno, state->GetArgs());
     }
   }
-
+ 
+  trace->Dump(output);
   return EXIT_SUCCESS;
 }
 
@@ -368,9 +388,6 @@ int main(int argc, char **argv)
     exec = FindExecutable(args[0]);
   }
 
-  // Create the tracer.
-  auto trace = std::make_unique<Trace>(output);
-
   // Fork & start tracing.
   switch (pid_t pid = fork()) {
     case -1: {
@@ -381,7 +398,7 @@ int main(int argc, char **argv)
     }
     default: {
       try {
-        return RunTracer(trace.get(), pid);
+        return RunTracer(output, pid);
       } catch (const std::exception &ex) {
         std::cerr << "[Exception] " << ex.what() << std::endl;
         return EXIT_FAILURE;

@@ -73,7 +73,7 @@ public:
       const fs::path &cwd,
       bool isCOW);
 
-  /// Destroys the process & writes data to a file.
+  /// Cleanup.
   ~Process();
 
   /// Dumps a process to a stream.
@@ -185,15 +185,15 @@ public:
   /**
    * Initiates a new trace, storing output in the specified directory.
    */
-  Trace(const fs::path &output);
+  Trace();
 
   /**
    * Cleanup.
    */
   ~Trace();
 
-  /// Returns the path to the output directory.
-  fs::path GetOutput() const { return output_; }
+  /// Dumps the trace to a file.
+  void Dump(const fs::path &output);
 
   /// Spawns a new process.
   void SpawnTrace(pid_t parent, pid_t pid);
@@ -215,8 +215,6 @@ public:
   void AddDependency(const fs::path &src, const fs::path &dst);
 
 private:
-  /// Output directory.
-  const fs::path output_;
   /// Next available UID.
   uint64_t nextUID_;
   /// Next available file ID.

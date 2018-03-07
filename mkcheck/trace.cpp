@@ -294,9 +294,8 @@ FDSet Process::GetInheritedFDs()
 }
 
 // -----------------------------------------------------------------------------
-Trace::Trace(const fs::path &output)
-  : output_(fs::absolute(output).normalize())
-  , nextUID_(1)
+Trace::Trace()
+  : nextUID_(1)
   , nextFID_(1)
 {
 }
@@ -304,7 +303,12 @@ Trace::Trace(const fs::path &output)
 // -----------------------------------------------------------------------------
 Trace::~Trace()
 {
-  std::ofstream os(output_.string());
+}
+
+// -----------------------------------------------------------------------------
+void Trace::Dump(const fs::path &output)
+{
+  std::ofstream os(output.string());
 
   // Save the list of files.
   os << "{" << std::endl;

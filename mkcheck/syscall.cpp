@@ -455,6 +455,7 @@ static const HandlerFn kHandlers[] =
   /* 0x123 */ [SYS_epoll_create1     ] = sys_ignore,
   /* 0x125 */ [SYS_pipe2             ] = sys_pipe,
   /* 0x12E */ [SYS_prlimit64         ] = sys_ignore,
+  /* 0x133 */ [SYS_sendmmsg          ] = sys_ignore,
   /* 0x13E */ [SYS_getrandom         ] = sys_ignore,
 };
 
