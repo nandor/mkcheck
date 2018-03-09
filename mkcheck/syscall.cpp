@@ -233,6 +233,16 @@ static void sys_readlink(Process *proc, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_getxattr(Process *proc, const Args &args)
 {
+  const fs::path path = ReadString(args.PID, args[0]);
+  const fs::path parent = proc->Normalise(path.parent_path());
+  if (args.Return >= 0) {
+      proc->AddInput(parent / path.filename());
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_lgetxattr(Process *proc, const Args &args)
+{
   const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
   if (args.Return >= 0) {
       proc->AddInput(path);
@@ -454,7 +464,8 @@ static const HandlerFn kHandlers[] =
   /* 0x0BA */ [SYS_gettid            ] = sys_ignore,
   /* 0x0BE */ [SYS_fsetxattr         ] = sys_fsetxattr,
   /* 0x0BF */ [SYS_getxattr          ] = sys_getxattr,
-  /* 0x0C0 */ [SYS_lgetxattr         ] = sys_ignore,
+  /* 0x0C0 */ [SYS_lgetxattr         ] = sys_lgetxattr,
+  /* 0x0C4 */ [SYS_flistxattr        ] = sys_ignore,
   /* 0x0CA */ [SYS_futex             ] = sys_ignore,
   /* 0x0CB */ [SYS_sched_setaffinity ] = sys_ignore,
   /* 0x0CC */ [SYS_sched_getaffinity ] = sys_ignore,
