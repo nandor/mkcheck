@@ -13,6 +13,7 @@
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 
 #include "trace.h"
 #include "util.h"
@@ -79,6 +80,23 @@ static void sys_lstat(Process *proc, const Args &args)
 
   if (args.Return >= 0) {
     proc->AddTouched(path);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_mmap(Process *proc, const Args &args)
+{
+  const int prot = args[2];
+  const int flags = args[3];
+  const int fd = args[4];
+
+  if (args.Return != MAP_ANON && fd != -1) {
+    // Writes are only carried out to the file in shared, writable mappings.
+    if ((flags & MAP_SHARED) && (prot & PROT_WRITE)) {
+      proc->AddOutput(fd);
+    } else {
+      proc->AddInput(fd);
+    }
   }
 }
 
@@ -357,7 +375,7 @@ static void sys_newfstatat(Process *proc, const Args &args)
 {
   const int dirfd = args[0];
   const fs::path path = proc->Normalise(dirfd, ReadString(args.PID, args[1]));
-  
+
   if (args.Return >= 0) {
     proc->AddTouched(path);
   }
@@ -439,7 +457,7 @@ static const HandlerFn kHandlers[] =
   /* 0x006 */ [SYS_lstat             ] = sys_lstat,
   /* 0x007 */ [SYS_poll              ] = sys_ignore,
   /* 0x008 */ [SYS_lseek             ] = sys_ignore,
-  /* 0x009 */ [SYS_mmap              ] = sys_ignore,
+  /* 0x009 */ [SYS_mmap              ] = sys_mmap,
   /* 0x00A */ [SYS_mprotect          ] = sys_ignore,
   /* 0x00B */ [SYS_munmap            ] = sys_ignore,
   /* 0x00C */ [SYS_brk               ] = sys_ignore,
