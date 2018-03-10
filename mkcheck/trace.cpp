@@ -33,17 +33,6 @@ Process::Process(
   , isCOW_(isCOW)
 {
   for (const auto &fd : fdSet) {
-    // open disables O_CLOEXEC by default, meaning that most processes leak
-    // children to child processses, as it happens in the case of GCC.
-    // To avoid cycles, only stdin and stdout and stderr are tracked.
-    if (fd.Fd < 3) {
-      if (fd.IsOutput) {
-        outputs_.insert(trace_->Find(fd.Path));
-      } else {
-        inputs_.insert(trace_->Find(fd.Path));
-      }
-    }
-
     files_.emplace(fd.Fd, fd);
   }
 }
@@ -187,9 +176,9 @@ void Process::Link(const fs::path &target, const fs::path &linkpath)
 }
 
 // -----------------------------------------------------------------------------
-void Process::MapFd(int fd, const fs::path &path, bool output)
+void Process::MapFd(int fd, const fs::path &path)
 {
-  FDInfo info(fd, path, false, output);
+  FDInfo info(fd, path, false);
 
   auto it = files_.find(fd);
   if (it == files_.end()) {
@@ -222,7 +211,7 @@ void Process::DupFd(int from, int to)
   }
 
   const auto &oldInfo = it->second;
-  FDInfo info(to, oldInfo.Path, false, oldInfo.IsOutput);
+  FDInfo info(to, oldInfo.Path, false);
 
   auto jt = files_.find(to);
   if (jt == files_.end()) {
@@ -240,12 +229,18 @@ void Process::Pipe(int rd, int wr)
   const auto pipeWr = path / std::to_string(wr);
 
   trace_->AddDependency(pipeWr, pipeRd);
-  AddInput(rd, pipeRd);
-  AddOutput(wr, pipeWr);
+  MapFd(rd, pipeRd);
+  MapFd(wr, pipeWr);
 }
 
 // -----------------------------------------------------------------------------
-void Process::SetCloseExec(int fd)
+void Process::CloseFd(int fd)
+{
+  files_.erase(fd);
+}
+
+// -----------------------------------------------------------------------------
+void Process::SetCloseExec(int fd, bool closeExec)
 {
   auto it = files_.find(fd);
   if (it == files_.end()) {
@@ -253,21 +248,7 @@ void Process::SetCloseExec(int fd)
         "Unknown file descriptor: " + std::to_string(fd)
     );
   }
-
-  it->second.CloseExec = true;
-}
-
-// -----------------------------------------------------------------------------
-void Process::ClearCloseExec(int fd)
-{
-  auto it = files_.find(fd);
-  if (it == files_.end()) {
-    throw std::runtime_error(
-        "Unknown file descriptor: " + std::to_string(fd)
-    );
-  }
-
-  it->second.CloseExec = false;
+  it->second.CloseExec = closeExec;
 }
 
 // -----------------------------------------------------------------------------
@@ -381,9 +362,9 @@ void Trace::SpawnTrace(pid_t parent, pid_t pid)
       image = 0;
       parentUID = 0;
 
-      fdSet.emplace_back(0, "/dev/stdin", false, false);
-      fdSet.emplace_back(1, "/dev/stdout", false, true);
-      fdSet.emplace_back(2, "/dev/stderr", false, true);
+      fdSet.emplace_back(0, "/dev/stdin", false);
+      fdSet.emplace_back(1, "/dev/stdout", false);
+      fdSet.emplace_back(2, "/dev/stderr", false);
     } else {
       auto proc = it->second;
       cwd = proc->GetCwd();

@@ -193,8 +193,8 @@ int RunTracer(const fs::path &output, pid_t root)
   std::unordered_map<pid_t, std::shared_ptr<ProcessState>> tracked;
   tracked[root] = std::make_shared<ProcessState>(root);
 
-  // Candidate processses to be started.
-  std::unordered_map<pid_t, pid_t> candidates;
+  // Processes waiting to be started.
+  std::set<pid_t> candidates;
 
   // Process to wait for - after clone/vfork/exec, the callee is given
   // priority in order to trap and set up the child's data structure.
@@ -213,11 +213,11 @@ int RunTracer(const fs::path &output, pid_t root)
     }
 
     // Wait for a child or any children to stop.
-    if ((pid = waitpid(waitFor, &status, 0)) < 0) {
+    if ((pid = waitpid(waitFor, &status, __WALL)) < 0) {
       throw std::runtime_error("waitpid failed");
     }
     waitFor = -1;
-  
+
     // The root process must exit with 0.
     if (WIFEXITED(status) && pid == root) {
       const int code = WEXITSTATUS(status);
@@ -232,7 +232,7 @@ int RunTracer(const fs::path &output, pid_t root)
       const int signo = WTERMSIG(status);
       throw std::runtime_error("killed by signal " + std::to_string(signo));
     }
-    
+
     // Remove the process from the tracked ones on exit.
     if (WIFEXITED(status) || WIFSIGNALED(status)) {
       trace->EndTrace(pid);
@@ -260,8 +260,16 @@ int RunTracer(const fs::path &output, pid_t root)
             // Get the ID of the child process.
             pid_t child;
             ptrace(PTRACE_GETEVENTMSG, pid, 0, &child);
+
+            // Set tracing options for the child.
+            ptrace(PTRACE_SETOPTIONS, pid, nullptr, kTraceOptions);
+
+            // Create an object tracking the process, if one does not exist yet.
+            tracked.emplace(child, std::make_shared<ProcessState>(child));
+            trace->SpawnTrace(pid, child);
+
             // Start tracking it.
-            candidates[child] = pid;
+            candidates.insert(child);
             restartSig = 0;
             break;
           }
@@ -273,14 +281,11 @@ int RunTracer(const fs::path &output, pid_t root)
         continue;
       }
       case SIGSTOP: {
-        // Ignore the first SIGSTOP in each process since it is dispatched
-        // after the new process is started, deliver it otherwise.
         auto it = candidates.find(pid);
         if (it != candidates.end()) {
-          restartSig = 0;
-          tracked.emplace(pid, std::make_shared<ProcessState>(pid));
-          trace->SpawnTrace(it->second, pid);
+          // The first SIGSTOP is ignored.
           candidates.erase(it);
+          restartSig = 0;
         } else {
           restartSig = SIGSTOP;
         }
@@ -326,7 +331,8 @@ int RunTracer(const fs::path &output, pid_t root)
       case SYS_clone:
       case SYS_vfork:
       case SYS_fork: {
-        waitFor = pid;
+        // Try to wait for the exit event of this sycall before any others.
+        waitFor = state->IsExiting() ? -1 : pid;
         break;
       }
     }
@@ -336,7 +342,7 @@ int RunTracer(const fs::path &output, pid_t root)
       Handle(trace.get(), sno, state->GetArgs());
     }
   }
- 
+
   trace->Dump(output);
   return EXIT_SUCCESS;
 }

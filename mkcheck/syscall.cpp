@@ -20,6 +20,22 @@
 
 
 // -----------------------------------------------------------------------------
+static void sys_read(Process *proc, const Args &args)
+{
+  if (args.Return >= 0) {
+    proc->AddInput(args[0]);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_write(Process *proc, const Args &args)
+{
+  if (args.Return >= 0) {
+    proc->AddOutput(args[0]);
+  }
+}
+
+// -----------------------------------------------------------------------------
 static void sys_open(Process *proc, const Args &args)
 {
   const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
@@ -27,23 +43,17 @@ static void sys_open(Process *proc, const Args &args)
   const int fd = args.Return;
 
   if (args.Return >= 0) {
-    if ((flags & O_WRONLY) || (flags & O_RDWR) || (flags & O_CREAT)) {
-      proc->AddOutput(fd, path);
-    } else {
-      proc->AddInput(fd, path);
-    }
-
-    if (flags & O_CLOEXEC) {
-      proc->SetCloseExec(fd);
-    } else {
-      proc->ClearCloseExec(fd);
-    }
+    proc->MapFd(fd, path);
+    proc->SetCloseExec(fd, flags & O_CLOEXEC);
   }
 }
 
 // -----------------------------------------------------------------------------
 static void sys_close(Process *proc, const Args &args)
 {
+  if (args.Return >= 0) {
+    proc->CloseFd(args[0]);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -52,8 +62,14 @@ static void sys_stat(Process *proc, const Args &args)
   const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
 
   if (args.Return >= 0) {
-    proc->AddInput(path);
+    proc->AddTouched(path);
   }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_fstat(Process *proc, const Args &args)
+{
+  proc->AddTouched(args[0]);
 }
 
 // -----------------------------------------------------------------------------
@@ -62,7 +78,52 @@ static void sys_lstat(Process *proc, const Args &args)
   const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
 
   if (args.Return >= 0) {
-    proc->AddInput(path);
+    proc->AddTouched(path);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_pread64(Process *proc, const Args &args)
+{
+  if (args.Return >= 0) {
+    proc->AddInput(args[0]);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_readv(Process *proc, const Args &args)
+{
+  if (args.Return >= 0) {
+    proc->AddInput(args[0]);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_writev(Process *proc, const Args &args)
+{
+  if (args.Return >= 0) {
+    proc->AddInput(args[0]);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_access(Process *proc, const Args &args)
+{
+  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
+
+  if (args.Return >= 0) {
+    proc->AddTouched(path);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_pipe(Process *proc, const Args &args)
+{
+  int fds[2];
+  ReadBuffer(args.PID, fds, args[0], 2 * sizeof(int));
+
+  if (args.Return >= 0) {
+    proc->Pipe(fds[0], fds[1]);
   }
 }
 
@@ -83,27 +144,6 @@ static void sys_dup2(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
-static void sys_access(Process *proc, const Args &args)
-{
-  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
-
-  if (args.Return >= 0) {
-    proc->AddInput(path);
-  }
-}
-
-// -----------------------------------------------------------------------------
-static void sys_pipe(Process *proc, const Args &args)
-{
-  int fds[2];
-  ReadBuffer(args.PID, fds, args[0], 2 * sizeof(int));
-
-  if (args.Return >= 0) {
-    proc->Pipe(fds[0], fds[1]);
-  }
-}
-
-// -----------------------------------------------------------------------------
 static void sys_fcntl(Process *proc, const Args &args)
 {
   const int fd = args[0];
@@ -117,16 +157,12 @@ static void sys_fcntl(Process *proc, const Args &args)
       }
       case F_DUPFD_CLOEXEC: {
         proc->DupFd(args[0], args.Return);
-        proc->SetCloseExec(args.Return);
+        proc->SetCloseExec(args.Return, false);
         break;
       }
       case F_SETFD: {
         const int arg = args[2];
-        if (arg & O_CLOEXEC) {
-          proc->SetCloseExec(fd);
-        } else {
-        proc->ClearCloseExec(fd);
-        }
+        proc->SetCloseExec(fd, arg & FD_CLOEXEC);
         break;
       }
       case F_GETFD:
@@ -140,6 +176,20 @@ static void sys_fcntl(Process *proc, const Args &args)
         );
       }
     }
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_ftruncate(Process *proc, const Args &args)
+{
+  throw std::runtime_error("not implemented");
+}
+
+// -----------------------------------------------------------------------------
+static void sys_getdents(Process *proc, const Args &args)
+{
+  if (args.Return >= 0) {
+    proc->AddInput(args[0]);
   }
 }
 
@@ -231,25 +281,6 @@ static void sys_readlink(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
-static void sys_getxattr(Process *proc, const Args &args)
-{
-  const fs::path path = ReadString(args.PID, args[0]);
-  const fs::path parent = proc->Normalise(path.parent_path());
-  if (args.Return >= 0) {
-      proc->AddInput(parent / path.filename());
-  }
-}
-
-// -----------------------------------------------------------------------------
-static void sys_lgetxattr(Process *proc, const Args &args)
-{
-  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
-  if (args.Return >= 0) {
-      proc->AddInput(path);
-  }
-}
-
-// -----------------------------------------------------------------------------
 static void sys_linkat(Process *proc, const Args &args)
 {
   if (args.Return >= 0) {
@@ -272,14 +303,28 @@ static void sys_fsetxattr(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
-static void sys_unlinkat(Process *proc, const Args &args)
+static void sys_getxattr(Process *proc, const Args &args)
 {
-  const int fd = args[0];
-  const fs::path path = proc->Normalise(fd, ReadString(args.PID, args[1]));
-
+  const fs::path path = ReadString(args.PID, args[0]);
+  const fs::path parent = proc->Normalise(path.parent_path());
   if (args.Return >= 0) {
-    proc->Remove(path);
+      proc->AddInput(parent / path.filename());
   }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_lgetxattr(Process *proc, const Args &args)
+{
+  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
+  if (args.Return >= 0) {
+      proc->AddInput(path);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_flistxattr(Process *proc, const Args &args)
+{
+  throw std::runtime_error("not implemented");
 }
 
 // -----------------------------------------------------------------------------
@@ -291,18 +336,8 @@ static void sys_openat(Process *proc, const Args &args)
 
   if (args.Return >= 0) {
     const int fd = args.Return;
-
-    if ((flags & O_WRONLY) || (flags & O_RDWR) || (flags & O_CREAT)) {
-      proc->AddOutput(fd, path);
-    } else {
-      proc->AddInput(fd, path);
-    }
-
-    if (flags & O_CLOEXEC) {
-      proc->SetCloseExec(fd);
-    } else {
-      proc->ClearCloseExec(fd);
-    }
+    proc->MapFd(fd, path);
+    proc->SetCloseExec(fd, flags & O_CLOEXEC);
   }
 }
 
@@ -318,6 +353,23 @@ static void sys_mkdirat(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_newfstatat(Process *proc, const Args &args)
+{
+  throw std::runtime_error("not implemented");
+}
+
+// -----------------------------------------------------------------------------
+static void sys_unlinkat(Process *proc, const Args &args)
+{
+  const int fd = args[0];
+  const fs::path path = proc->Normalise(fd, ReadString(args.PID, args[1]));
+
+  if (args.Return >= 0) {
+    proc->Remove(path);
+  }
+}
+
+// -----------------------------------------------------------------------------
 static void sys_faccessat(Process *proc, const Args &args)
 {
   const int fd = args[0];
@@ -326,6 +378,12 @@ static void sys_faccessat(Process *proc, const Args &args)
   if (args.Return >= 0) {
     proc->AddInput(path);
   }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_splice(Process *proc, const Args &args)
+{
+  throw std::runtime_error("not implemented");
 }
 
 // -----------------------------------------------------------------------------
@@ -339,11 +397,7 @@ static void sys_dup3(Process *proc, const Args &args)
     proc->DupFd(oldfd, newfd);
   }
 
-  if (flags & O_CLOEXEC) {
-    proc->SetCloseExec(newfd);
-  } else {
-    proc->ClearCloseExec(newfd);
-  }
+  proc->SetCloseExec(newfd, flags & O_CLOEXEC);
 }
 
 // -----------------------------------------------------------------------------
@@ -356,13 +410,9 @@ static void sys_pipe2(Process *proc, const Args &args)
   if (args.Return >= 0) {
     proc->Pipe(fds[0], fds[1]);
 
-    if (flags & O_CLOEXEC) {
-      proc->SetCloseExec(fds[0]);
-      proc->SetCloseExec(fds[1]);
-    } else {
-      proc->ClearCloseExec(fds[0]);
-      proc->ClearCloseExec(fds[1]);
-    }
+    const bool closeExec = flags & O_CLOEXEC;
+    proc->SetCloseExec(fds[0], closeExec);
+    proc->SetCloseExec(fds[1], closeExec);
   }
 }
 
@@ -375,12 +425,12 @@ typedef void (*HandlerFn) (Process *proc, const Args &args);
 
 static const HandlerFn kHandlers[] =
 {
-  /* 0x000 */ [SYS_read              ] = sys_ignore,
-  /* 0x001 */ [SYS_write             ] = sys_ignore,
+  /* 0x000 */ [SYS_read              ] = sys_read,
+  /* 0x001 */ [SYS_write             ] = sys_write,
   /* 0x002 */ [SYS_open              ] = sys_open,
   /* 0x003 */ [SYS_close             ] = sys_close,
   /* 0x004 */ [SYS_stat              ] = sys_stat,
-  /* 0x005 */ [SYS_fstat             ] = sys_ignore,
+  /* 0x005 */ [SYS_fstat             ] = sys_fstat,
   /* 0x006 */ [SYS_lstat             ] = sys_lstat,
   /* 0x007 */ [SYS_poll              ] = sys_ignore,
   /* 0x008 */ [SYS_lseek             ] = sys_ignore,
@@ -392,9 +442,9 @@ static const HandlerFn kHandlers[] =
   /* 0x00E */ [SYS_rt_sigprocmask    ] = sys_ignore,
   /* 0x00F */ [SYS_rt_sigreturn      ] = sys_ignore,
   /* 0x010 */ [SYS_ioctl             ] = sys_ignore,
-  /* 0x011 */ [SYS_pread64           ] = sys_ignore,
-  /* 0x013 */ [SYS_readv             ] = sys_ignore,
-  /* 0x014 */ [SYS_writev            ] = sys_ignore,
+  /* 0x011 */ [SYS_pread64           ] = sys_pread64,
+  /* 0x013 */ [SYS_readv             ] = sys_readv,
+  /* 0x014 */ [SYS_writev            ] = sys_writev,
   /* 0x015 */ [SYS_access            ] = sys_access,
   /* 0x016 */ [SYS_pipe              ] = sys_pipe,
   /* 0x017 */ [SYS_select            ] = sys_ignore,
@@ -426,8 +476,8 @@ static const HandlerFn kHandlers[] =
   /* 0x03F */ [SYS_uname             ] = sys_ignore,
   /* 0x048 */ [SYS_fcntl             ] = sys_fcntl,
   /* 0x049 */ [SYS_flock             ] = sys_ignore,
-  /* 0x04D */ [SYS_ftruncate         ] = sys_ignore,
-  /* 0x04E */ [SYS_getdents          ] = sys_ignore,
+  /* 0x04D */ [SYS_ftruncate         ] = sys_ftruncate,
+  /* 0x04E */ [SYS_getdents          ] = sys_getdents,
   /* 0x04F */ [SYS_getcwd            ] = sys_ignore,
   /* 0x050 */ [SYS_chdir             ] = sys_chdir,
   /* 0x051 */ [SYS_fchdir            ] = sys_fchdir,
@@ -465,7 +515,7 @@ static const HandlerFn kHandlers[] =
   /* 0x0BE */ [SYS_fsetxattr         ] = sys_fsetxattr,
   /* 0x0BF */ [SYS_getxattr          ] = sys_getxattr,
   /* 0x0C0 */ [SYS_lgetxattr         ] = sys_lgetxattr,
-  /* 0x0C4 */ [SYS_flistxattr        ] = sys_ignore,
+  /* 0x0C4 */ [SYS_flistxattr        ] = sys_flistxattr,
   /* 0x0CA */ [SYS_futex             ] = sys_ignore,
   /* 0x0CB */ [SYS_sched_setaffinity ] = sys_ignore,
   /* 0x0CC */ [SYS_sched_getaffinity ] = sys_ignore,
@@ -477,18 +527,18 @@ static const HandlerFn kHandlers[] =
   /* 0x0EB */ [SYS_utimes            ] = sys_ignore,
   /* 0x101 */ [SYS_openat            ] = sys_openat,
   /* 0x102 */ [SYS_mkdirat           ] = sys_mkdirat,
-  /* 0x106 */ [SYS_newfstatat        ] = sys_ignore,
+  /* 0x106 */ [SYS_newfstatat        ] = sys_newfstatat,
   /* 0x107 */ [SYS_unlinkat          ] = sys_unlinkat,
   /* 0x10C */ [SYS_fchmodat          ] = sys_ignore,
   /* 0x10D */ [SYS_faccessat         ] = sys_faccessat,
   /* 0x10F */ [SYS_ppoll             ] = sys_ignore,
   /* 0x111 */ [SYS_set_robust_list   ] = sys_ignore,
-  /* 0x113 */ [SYS_splice            ] = sys_ignore,
+  /* 0x113 */ [SYS_splice            ] = sys_splice,
   /* 0x118 */ [SYS_utimensat         ] = sys_ignore,
   /* 0x122 */ [SYS_eventfd2          ] = sys_ignore,
   /* 0x123 */ [SYS_epoll_create1     ] = sys_ignore,
   /* 0x124 */ [SYS_dup3              ] = sys_dup3,
-  /* 0x125 */ [SYS_pipe2             ] = sys_pipe,
+  /* 0x125 */ [SYS_pipe2             ] = sys_pipe2,
   /* 0x12E */ [SYS_prlimit64         ] = sys_ignore,
   /* 0x133 */ [SYS_sendmmsg          ] = sys_ignore,
   /* 0x13E */ [SYS_getrandom         ] = sys_ignore,
@@ -515,7 +565,9 @@ void Handle(Trace *trace, int64_t sno, const Args &args)
   } catch (std::exception &ex) {
     throw std::runtime_error(
         "Exception while handling syscall " + std::to_string(sno) +
-        " in process " + std::to_string(proc->GetUID()) + ": " +
+        " in process " + std::to_string(proc->GetUID()) + " (" +
+        trace->GetFileName(proc->GetImage()) +
+        "): " +
         ex.what()
     );
   }

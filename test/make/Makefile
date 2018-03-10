@@ -5,9 +5,11 @@
 CC = gcc
 OUT = out
 
-.PHONY: clean
+.PHONY: dirs clean
 
-all : $(OUT) $(OUT)/main
+all : dirs $(OUT)/main
+
+dirs : $(OUT)
 
 $(OUT) :
 	mkdir -p $(OUT)
@@ -30,7 +32,7 @@ $(OUT)/c.o : c.c c.h
 $(OUT)/main.o : main.c
 	$(CC) -c -o $(OUT)/main.o main.c
 
-$(OUT)/main : $(OUT) $(OUT)/main.o $(OUT)/a.o $(OUT)/b.o $(OUT)/c.o $(OUT)/lib_a.o $(OUT)/lib_b.o
+$(OUT)/main : $(OUT)/main.o $(OUT)/a.o $(OUT)/b.o $(OUT)/c.o $(OUT)/lib_a.o $(OUT)/lib_b.o
 	$(CC) -o $(OUT)/main $(OUT)/main.o $(OUT)/a.o $(OUT)/b.o $(OUT)/c.o $(OUT)/lib_a.o $(OUT)/lib_b.o
 
 clean:

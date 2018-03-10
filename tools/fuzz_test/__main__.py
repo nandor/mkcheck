@@ -32,6 +32,36 @@ class Project(object):
         return True
 
 
+class Make(Project):
+
+    def __init__(self, root, tmpPath):
+        self.projectPath = root
+        self.buildPath = root
+        self.tmpPath = tmpPath
+
+    def clean_build(self):
+        """Performs a clean build of the project."""
+
+        # Clean the project.
+        self.clean()
+
+        # Run the build with mkcheck.
+        run_proc(
+          [ TOOL_PATH, "--output={0}".format(self.tmpPath), "--", "make" ],
+          cwd=self.buildPath
+        )
+
+    def clean(self):
+        """Cleans the project."""
+
+        run_proc([ "make", "clean" ], cwd=self.buildPath)
+
+    def build(self):
+        """Performs an incremental build."""
+
+        run_proc([ "make", "all" ], cwd=self.buildPath)
+
+
 class CMakeProject(Project):
     """Project relying on CMake."""
 
@@ -204,11 +234,15 @@ def list_files(project, files):
 
 def get_project(root, args):
     """Identifies the type of the project."""
+
     if os.path.isfile(os.path.join(root, 'CMakeLists.txt')):
         if os.path.isfile(os.path.join(root, 'build', 'Makefile')):
             return CMakeMake(root, args.tmp_path)
         if os.path.isfile(os.path.join(root, 'build', 'build.ninja')):
             return CMakeNinja(root, args.tmp_path)
+
+    if os.path.isfile(os.path.join(root, 'Makefile')):
+        return Make(root, args.tmp_path)
 
     raise RuntimeError('Unknown project type')
 
