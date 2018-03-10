@@ -355,7 +355,12 @@ static void sys_mkdirat(Process *proc, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_newfstatat(Process *proc, const Args &args)
 {
-  throw std::runtime_error("not implemented");
+  const int dirfd = args[0];
+  const fs::path path = proc->Normalise(dirfd, ReadString(args.PID, args[1]));
+  
+  if (args.Return >= 0) {
+    proc->AddTouched(path);
+  }
 }
 
 // -----------------------------------------------------------------------------
