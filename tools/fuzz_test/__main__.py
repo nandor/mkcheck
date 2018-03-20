@@ -103,6 +103,8 @@ class CMakeProject(Project):
 
         if f.startswith(self.buildPath):
             return False
+        if not f.startswith(self.projectPath):
+            return False
         for ending in ['.h', '.cpp', '.cmake', '.cmake.in']:
             if f.endswith(ending):
                 return False
