@@ -200,7 +200,9 @@ static void sys_fcntl(Process *proc, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_ftruncate(Process *proc, const Args &args)
 {
-  throw std::runtime_error("not implemented");
+  if (args.Return >= 0) {
+    proc->AddOutput(args[0]);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -410,6 +412,14 @@ static void sys_splice(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_fallocate(Process *proc, const Args &args)
+{
+  if (args.Return >= 0) {
+    proc->AddOutput(args[0]);
+  }
+}
+
+// -----------------------------------------------------------------------------
 static void sys_dup3(Process *proc, const Args &args)
 {
   const int oldfd = args[0];
@@ -518,6 +528,7 @@ static const HandlerFn kHandlers[] =
   /* 0x061 */ [SYS_getrlimit         ] = sys_ignore,
   /* 0x062 */ [SYS_getrusage         ] = sys_ignore,
   /* 0x063 */ [SYS_sysinfo           ] = sys_ignore,
+  /* 0x064 */ [SYS_times             ] = sys_ignore,
   /* 0x066 */ [SYS_getuid            ] = sys_ignore,
   /* 0x068 */ [SYS_getgid            ] = sys_ignore,
   /* 0x06B */ [SYS_geteuid           ] = sys_ignore,
@@ -528,6 +539,7 @@ static const HandlerFn kHandlers[] =
   /* 0x073 */ [SYS_getgroups         ] = sys_ignore,
   /* 0x07F */ [SYS_rt_sigpending     ] = sys_ignore,
   /* 0x083 */ [SYS_sigaltstack       ] = sys_ignore,
+  /* 0x087 */ [SYS_personality       ] = sys_ignore,
   /* 0x089 */ [SYS_statfs            ] = sys_ignore,
   /* 0x08A */ [SYS_fstatfs           ] = sys_ignore,
   /* 0x09D */ [SYS_prctl             ] = sys_ignore,
@@ -558,6 +570,7 @@ static const HandlerFn kHandlers[] =
   /* 0x111 */ [SYS_set_robust_list   ] = sys_ignore,
   /* 0x113 */ [SYS_splice            ] = sys_splice,
   /* 0x118 */ [SYS_utimensat         ] = sys_ignore,
+  /* 0x11D */ [SYS_fallocate         ] = sys_fallocate,
   /* 0x122 */ [SYS_eventfd2          ] = sys_ignore,
   /* 0x123 */ [SYS_epoll_create1     ] = sys_ignore,
   /* 0x124 */ [SYS_dup3              ] = sys_dup3,

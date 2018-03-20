@@ -42,6 +42,9 @@ class Make(Project):
         self.buildPath = root
         self.tmpPath = tmpPath
 
+        code = subprocess.Popen(['make', 'clean'], cwd=root).wait()
+        self.has_clean = code == 0
+
     def clean_build(self):
         """Performs a clean build of the project."""
 
@@ -56,13 +59,16 @@ class Make(Project):
 
     def clean(self):
         """Cleans the project."""
-
-        run_proc([ "make", "clean" ], cwd=self.buildPath)
+        
+        if self.has_clean:
+          run_proc([ "make", "clean" ], cwd=self.buildPath)
+        else:
+          run_proc([ "git", "clean", "-f" ], cwd=self.buildPath)
 
     def build(self):
         """Performs an incremental build."""
 
-        run_proc([ "make", "all" ], cwd=self.buildPath)
+        run_proc([ "make" ], cwd=self.buildPath)
 
 
 class CMakeProject(Project):

@@ -221,7 +221,7 @@ private:
     /// Flag indicating if the file exists or not.
     bool Exists;
     /// List of other files this depends on.
-    std::vector<uint64_t> Deps;
+    std::set<uint64_t> Deps;
 
     /// Constructs a new info object.
     FileInfo(const std::string &Name, bool exists)

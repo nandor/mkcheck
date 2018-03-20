@@ -4,6 +4,7 @@
 
 import os
 import json
+from collections import defaultdict
 
 
 
@@ -54,10 +55,26 @@ def parse_graph(path):
     for uid, file in files.iteritems():
         for dep in file.get('deps', []):
             graph.add_dependency(files[dep]['name'], files[uid]['name'])
-
+    
+    gid = {}
+    for proc in sorted(data["procs"], key=lambda p: p["uid"]):
+      uid = proc["uid"]
+      if proc.get('cow', False):
+        gid[uid] = gid[proc["parent"]]
+      else:
+        gid[uid] = uid
+  
+    groups = defaultdict(lambda: (set(), set()))
     for proc in data["procs"]:
-        for input in proc.get('input', []):
-            for output in proc.get('output', []):
+      group_id = gid[proc["uid"]]
+      
+      ins, outs = groups[group_id]
+      ins.update(proc.get('input', []))
+      outs.update(proc.get('output', []))
+  
+    for _, (ins, outs) in groups.iteritems():
+        for input in ins:
+            for output in outs:
                 graph.add_dependency(
                     files[input]['name'],
                     files[output]['name']

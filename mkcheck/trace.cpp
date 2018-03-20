@@ -51,7 +51,7 @@ void Process::Dump(std::ostream &os)
   os << "  \"image\": " << image_ << "," << std::endl;
 
   if (isCOW_) {
-    os << "  \"cow\": true,";
+    os << "  \"cow\": true," << std::endl;
   }
 
   // Dump output files.
@@ -326,17 +326,10 @@ void Trace::Dump(const fs::path &output)
 
   // Save the list of processes.
   {
-    std::vector<Process *> procs;
-    for (const auto &proc : procs_) {
-      if (!proc.second->IsCOW()) {
-        procs.push_back(proc.second.get());
-      }
-    }
-
     os << "\"procs\": [" << std::endl;
-    for (auto it = procs.begin(); it != procs.end();) {
-      (*it)->Dump(os);
-      if (++it != procs.end()) {
+    for (auto it = procs_.begin(); it != procs_.end();) {
+      it->second->Dump(os);
+      if (++it != procs_.end()) {
         os << ",";
       }
     }
@@ -477,5 +470,5 @@ void Trace::AddDependency(const fs::path &src, const fs::path &dst)
   const auto sID = Find(src);
   const auto dID = Find(dst);
   auto &info = fileInfos_.find(dID)->second;
-  info.Deps.push_back(sID);
+  info.Deps.insert(sID);
 }
