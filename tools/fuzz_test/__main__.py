@@ -29,6 +29,9 @@ class Project(object):
             return False
         if f == TOOL_PATH:
             return False
+        for ending in ['.pyc']:
+            if f.endswith(ending):
+                return False
         return True
 
 
@@ -105,7 +108,7 @@ class CMakeProject(Project):
             return False
         if not f.startswith(self.projectPath):
             return False
-        for ending in ['.h', '.cpp', '.cmake', '.cmake.in']:
+        for ending in ['.h', '.cpp', '.cmake', '.cmake.in', '.c', '.cc', '.C']:
             if f.endswith(ending):
                 return False
 
