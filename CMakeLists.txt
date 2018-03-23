@@ -10,8 +10,10 @@ find_package(Boost COMPONENTS system filesystem program_options REQUIRED)
 add_compile_options(-std=c++1y)
 
 add_executable(mkcheck
+    mkcheck/fd.cpp
     mkcheck/mkcheck.cpp
     mkcheck/syscall.cpp
+    mkcheck/proc.cpp
     mkcheck/trace.cpp
     mkcheck/util.cpp
 )

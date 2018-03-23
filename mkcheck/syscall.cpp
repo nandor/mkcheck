@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
+#include "proc.h"
 #include "trace.h"
 #include "util.h"
 
