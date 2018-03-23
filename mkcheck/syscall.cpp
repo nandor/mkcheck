@@ -61,7 +61,6 @@ static void sys_close(Process *proc, const Args &args)
 static void sys_stat(Process *proc, const Args &args)
 {
   const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
-
   if (args.Return >= 0) {
     proc->AddTouched(path);
   }
@@ -70,7 +69,9 @@ static void sys_stat(Process *proc, const Args &args)
 // -----------------------------------------------------------------------------
 static void sys_fstat(Process *proc, const Args &args)
 {
-  proc->AddTouched(args[0]);
+  if (args.Return >= 0) {
+    proc->AddTouched(args[0]);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -162,6 +163,14 @@ static void sys_dup2(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_socket(Process *proc, const Args &args)
+{
+  if (args.Return >= 0) {
+    proc->MapFd(args.Return, "/proc/network");
+  }
+}
+
+// -----------------------------------------------------------------------------
 static void sys_fcntl(Process *proc, const Args &args)
 {
   const int fd = args[0];
@@ -186,6 +195,11 @@ static void sys_fcntl(Process *proc, const Args &args)
       case F_GETFD:
       case F_GETFL:
       case F_SETFL: {
+        break;
+      }
+      case F_GETLK:
+      case F_SETLK:
+      case F_SETLKW: {
         break;
       }
       default: {
@@ -348,6 +362,14 @@ static void sys_flistxattr(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_getdents64(Process *proc, const Args &args)
+{
+  if (args.Return >= 0) {
+    proc->AddInput(args[0]);
+  }
+}
+
+// -----------------------------------------------------------------------------
 static void sys_openat(Process *proc, const Args &args)
 {
   const int dirfd = args[0];
@@ -489,8 +511,9 @@ static const HandlerFn kHandlers[] =
   /* 0x020 */ [SYS_dup               ] = sys_dup,
   /* 0x021 */ [SYS_dup2              ] = sys_dup2,
   /* 0x023 */ [SYS_nanosleep         ] = sys_ignore,
+  /* 0x026 */ [SYS_setitimer         ] = sys_ignore,
   /* 0x027 */ [SYS_getpid            ] = sys_ignore,
-  /* 0x029 */ [SYS_socket            ] = sys_ignore,
+  /* 0x029 */ [SYS_socket            ] = sys_socket,
   /* 0x02A */ [SYS_connect           ] = sys_ignore,
   /* 0x02C */ [SYS_sendto            ] = sys_ignore,
   /* 0x02D */ [SYS_recvfrom          ] = sys_ignore,
@@ -503,12 +526,14 @@ static const HandlerFn kHandlers[] =
   /* 0x036 */ [SYS_setsockopt        ] = sys_ignore,
   /* 0x037 */ [SYS_getsockopt        ] = sys_ignore,
   /* 0x038 */ [SYS_clone             ] = sys_ignore,
+  /* 0x039 */ [SYS_fork              ] = sys_ignore,
   /* 0x03A */ [SYS_vfork             ] = sys_ignore,
   /* 0x03B */ [SYS_execve            ] = sys_ignore,
   /* 0x03D */ [SYS_wait4             ] = sys_ignore,
   /* 0x03F */ [SYS_uname             ] = sys_ignore,
   /* 0x048 */ [SYS_fcntl             ] = sys_fcntl,
   /* 0x049 */ [SYS_flock             ] = sys_ignore,
+  /* 0x04A */ [SYS_fsync             ] = sys_ignore,
   /* 0x04D */ [SYS_ftruncate         ] = sys_ftruncate,
   /* 0x04E */ [SYS_getdents          ] = sys_getdents,
   /* 0x04F */ [SYS_getcwd            ] = sys_ignore,
@@ -551,14 +576,18 @@ static const HandlerFn kHandlers[] =
   /* 0x0BF */ [SYS_getxattr          ] = sys_getxattr,
   /* 0x0C0 */ [SYS_lgetxattr         ] = sys_lgetxattr,
   /* 0x0C4 */ [SYS_flistxattr        ] = sys_flistxattr,
+  /* 0x0C9 */ [SYS_time              ] = sys_ignore,
   /* 0x0CA */ [SYS_futex             ] = sys_ignore,
   /* 0x0CB */ [SYS_sched_setaffinity ] = sys_ignore,
   /* 0x0CC */ [SYS_sched_getaffinity ] = sys_ignore,
+  /* 0x0D9 */ [SYS_getdents64        ] = sys_getdents64,
   /* 0x0DA */ [SYS_set_tid_address   ] = sys_ignore,
+  /* 0x0DB */ [SYS_restart_syscall   ] = sys_ignore,
   /* 0x0DD */ [SYS_fadvise64         ] = sys_ignore,
   /* 0x0E4 */ [SYS_clock_gettime     ] = sys_ignore,
   /* 0x0E5 */ [SYS_clock_getres      ] = sys_ignore,
   /* 0x0E7 */ [SYS_exit_group        ] = sys_ignore,
+  /* 0x0EA */ [SYS_tgkill            ] = sys_ignore,
   /* 0x0EB */ [SYS_utimes            ] = sys_ignore,
   /* 0x101 */ [SYS_openat            ] = sys_openat,
   /* 0x102 */ [SYS_mkdirat           ] = sys_mkdirat,

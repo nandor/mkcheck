@@ -157,7 +157,7 @@ std::string FindExecutable(const std::string &exec)
       return pathname;
     }
   }
-  throw std::runtime_error("Cannot find executable.");
+  throw std::runtime_error("Cannot find executable: " + exec);
 }
 
 // -----------------------------------------------------------------------------

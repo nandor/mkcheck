@@ -69,6 +69,18 @@ class Make(Project):
         """Performs an incremental build."""
 
         run_proc([ "make" ], cwd=self.buildPath)
+    
+    def filter(self, f):
+        """Decides if the file is relevant to the project."""
+
+        if not super(Make, self).filter(f):
+            return False
+        
+        for ending in ['Makefile']:
+            if f.endswith(ending):
+                return False
+        
+        return True
 
 
 class CMakeProject(Project):
