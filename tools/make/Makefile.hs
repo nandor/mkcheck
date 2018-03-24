@@ -42,9 +42,10 @@ data Node
 
 expand :: Makefile -> Either String [Node]
 expand Makefile{ mkRules } =
-  sequence [toNode mrOutput mrInputs mrCommands | Rule{..} <- mkRules]
+  sequence rules >>= dedup
   where
     vars = Map.fromList [(maKey, maValue) | Assignment{..} <- mkRules]
+    rules = [toNode mrOutput mrInputs mrCommands | Rule{..} <- mkRules]
 
     replace = \case
       '$' : '(' : str ->
@@ -68,3 +69,21 @@ expand Makefile{ mkRules } =
       inputs' <- sequence . map replace $ inputs
       commands' <- sequence . map replace $ commands
       Right (Node output' inputs' commands')
+
+    -- Deduplicates dependency definitions of the same rule.
+    dedup nodes =
+      sequence (map dedup (Map.toList groups))
+      where
+        groups =
+          let accum acc node = Map.insertWith (++) (ndOutput node) [node] acc
+          in foldl accum Map.empty nodes
+
+        dedup (output, nodes)
+          = case [ndCommands | Node{..} <- nodes, not (null ndCommands)] of
+              _ : _ : _ -> Left "Redefinition of rule"
+              cmds -> Right $ Node
+                { ndOutput = output
+                , ndInputs = concatMap ndInputs nodes
+                , ndCommands = concat cmds
+                }
+
