@@ -27,7 +27,7 @@ parseMakefile text
 makefile :: Parser Makefile
 makefile = do
   skipComments
-  entries <- Atto.many' ((assignment <|> rule) <* skipComments)
+  entries <- Atto.many' ((assignment <|> rule <|> include) <* skipComments)
   Atto.endOfInput
   return $ Makefile entries
 
@@ -74,3 +74,11 @@ rule = Atto.try $ do
     , mrInputs = filter (/= []) . map Text.unpack . Text.split isSpace $ input
     , mrCommands = map Text.unpack commands
     }
+
+include :: Parser Entry
+include = Atto.try $ do
+  Atto.string "include"
+  Atto.skipWhile isSpace
+  path <- Text.strip <$> Atto.takeTill (== '\n')
+  char '\n'
+  return $ Include { miPath = Text.unpack path }

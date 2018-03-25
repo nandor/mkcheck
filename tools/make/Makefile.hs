@@ -22,6 +22,9 @@ data Entry
     , mrInputs :: [String]
     , mrCommands :: [String]
     }
+  | Include
+    { miPath :: String
+    }
   deriving (Eq, Ord, Show)
 
 
@@ -40,11 +43,11 @@ data Node
 
 
 
-expand :: Makefile -> Either String [Node]
-expand Makefile{ mkRules } =
+expand :: [(String, String)] -> Makefile -> Either String [Node]
+expand env Makefile{ mkRules } =
   sequence rules >>= dedup
   where
-    vars = Map.fromList [(maKey, maValue) | Assignment{..} <- mkRules]
+    vars = Map.fromList (env ++ [(maKey, maValue) | Assignment{..} <- mkRules])
     rules = [toNode mrOutput mrInputs mrCommands | Rule{..} <- mkRules]
 
     replace = \case
