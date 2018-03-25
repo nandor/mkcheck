@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 SCRIPTPATH="$(cd "$(dirname $BASH_SOURCE)"; pwd -P)"
 

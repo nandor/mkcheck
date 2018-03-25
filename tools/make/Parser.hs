@@ -15,8 +15,6 @@ import qualified Data.Text.IO as Text
 
 import Makefile
 
-import Debug.Trace
-
 
 
 parseMakefile :: Text -> Either String Makefile
@@ -51,7 +49,13 @@ assignment :: Parser Entry
 assignment = Atto.try $ do
   name <- Text.unpack . Text.strip <$> takeLineTill (== '=')
   Atto.char '='
-  value <- Text.unpack . Text.strip <$> Atto.takeTill (== '\n')
+
+  let parseValue = anyChar >>= \case
+        '\\' -> char '\n' >> parseValue
+        '\n' -> return []
+        c -> (c:) <$> parseValue
+        
+  value <- parseValue
   return $ Assignment name value
 
 
@@ -74,6 +78,7 @@ rule = Atto.try $ do
     , mrInputs = filter (/= []) . map Text.unpack . Text.split isSpace $ input
     , mrCommands = map Text.unpack commands
     }
+
 
 include :: Parser Entry
 include = Atto.try $ do
