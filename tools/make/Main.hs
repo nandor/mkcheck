@@ -7,6 +7,10 @@ module Main where
 import           Control.Monad
 import           Data.List
 import           Data.List.Split
+import           Data.Map (Map)
+import qualified Data.Map as Map
+import           Data.Set (Set)
+import qualified Data.Set as Set
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
@@ -66,23 +70,31 @@ parseTree rootPath path = do
       return make'
 
 
-expandRule :: FilePath -> String -> [Node] -> IO [Node]
-expandRule root rule make
-  = case find (\Node{..} -> ndOutput == rule) make of
-      Nothing -> return make
-      Just Node{..} -> do
-        -- TODO: detect cycles
-        depNodes <- concat <$> mapM (\dep -> expandRule root dep make) ndInputs
+type Rule = (FilePath, String)
 
-        recs <- forM (concatMap parse ndCommands) $ \(path, rule) -> do
-          rec <- absolute path >>= parseTree root
-          next <- expandRule root rule rec
-          return next
 
-        return $ nub (depNodes ++ concat recs)
+explore :: FilePath -> Map FilePath [Node] -> Set Rule -> [Rule] -> IO [Node]
+explore _ files _ [] =
+  return $ nub (concatMap snd (Map.toList files))
+explore rootPath files visited rules@((path, rule):rs)
+  | (path, rule) `Set.member` visited =
+    explore rootPath files visited rs
+  | Just file <- Map.lookup path files =
+      case find (\Node{..} -> ndOutput == rule) file of
+        Nothing ->
+          explore rootPath files visited rs
+        Just Node{..} -> do
+          let deps = [(path, rule) | rule <- ndInputs]
+          let recs = concatMap parse ndCommands
+          let rules' = rs ++ deps ++ recs
+          let visited' = Set.insert (path, rule) visited
+          explore rootPath files visited' rules'
+  | otherwise = do
+    nodes <- parseTree rootPath path
+    explore rootPath (Map.insert path nodes files) visited rules
   where
     parse cmd = case splitOn " " cmd of
-      "make" : "-f" : path : rule : [] -> [(root </> path, rule)]
+      "make" : "-f" : path : rule : [] -> [(rootPath </> path, rule)]
       _ -> []
 
 
@@ -91,10 +103,9 @@ main = getArgs >>= \case
   [path] -> do
     makePath <- absolute path
     let rootPath = takeDirectory makePath
-    make <- parseTree rootPath makePath
-    make' <- expandRule rootPath "all" make
-    let phony = ".PHONY" : concat [ndInputs | Node{..} <- make', ndOutput == ".PHONY"]
-    forM_ make' $ \Node{..} -> do
+    nodes <- explore rootPath Map.empty Set.empty [(makePath, "all")]
+    let phony = ".PHONY" : concat [ndInputs | Node{..} <- nodes, ndOutput == ".PHONY"]
+    forM_ nodes $ \Node{..} -> do
       unless (ndOutput `elem` phony) $ do
         putStrLn (ndOutput ++ ": " ++ intercalate ", " (ndInputs \\ phony))
   _ -> do
