@@ -42,7 +42,12 @@ class Make(Project):
         self.buildPath = root
         self.tmpPath = tmpPath
 
-        code = subprocess.Popen(['make', 'clean'], cwd=root).wait()
+        code = subprocess.Popen(
+          ['make', 'clean', '--dry-run'], 
+          stdout=subprocess.PIPE,
+          stdin=subprocess.PIPE,
+          cwd=root
+        ).wait()
         self.has_clean = code == 0
 
     def clean_build(self):
@@ -170,6 +175,8 @@ def fuzz_test(project, files):
     inputs, outputs = parse_files(project.tmpPath)
     graph = parse_graph(project.tmpPath)
     t0 = read_mtimes(outputs)
+    
+    project.build()
 
     if len(files) == 0:
         fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
