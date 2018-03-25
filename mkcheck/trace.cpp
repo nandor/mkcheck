@@ -2,6 +2,7 @@
 // Licensing information can be found in the LICENSE file.
 // (C) 2017 Nandor Licker. All rights reserved.
 
+#include <fstream>
 #include <climits>
 
 #include "proc.h"
