@@ -22,7 +22,7 @@ import           System.FilePath
 import Makefile
 import Parser
 
-
+import Debug.Trace
 
 mkEnv :: [(String, String)]
 mkEnv = [("MAKE", "make")]
@@ -79,20 +79,22 @@ explore _ files _ [] =
 explore rootPath files visited rules@((path, rule):rs)
   | (path, rule) `Set.member` visited =
     explore rootPath files visited rs
-  | Just file <- Map.lookup path files =
-      case find (\Node{..} -> ndOutput == rule) file of
-        Nothing ->
-          explore rootPath files visited rs
-        Just Node{..} -> do
-          let deps = [(path, rule) | rule <- ndInputs]
-          let recs = concatMap parse ndCommands
-          let rules' = rs ++ deps ++ recs
-          let visited' = Set.insert (path, rule) visited
-          explore rootPath files visited' rules'
+  | Just file <- Map.lookup path files = do
+    case find (\Node{..} -> ndOutput == rule) file of
+      Nothing ->
+        explore rootPath files visited rs
+      Just Node{..} -> do
+        let deps = [(path, rule) | rule <- ndInputs]
+        let recs = concatMap parse ndCommands
+        let rules' = rs ++ deps ++ recs
+        let visited' = Set.insert (path, rule) visited
+        explore rootPath files visited' rules'
   | otherwise = do
+    traceShowM path
     nodes <- parseTree rootPath path
     explore rootPath (Map.insert path nodes files) visited rules
   where
+    parse ('@':cmd) = parse cmd
     parse cmd = case splitOn " " cmd of
       "make" : "-f" : path : rule : [] -> [(rootPath </> path, rule)]
       _ -> []

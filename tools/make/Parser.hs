@@ -57,7 +57,7 @@ assignment = Atto.try $ do
         '\n' -> return []
         c -> (c:) <$> parseValue
         
-  value <- parseValue
+  value <- dropWhile isSpace <$> parseValue
   return $ Assignment name value
 
 

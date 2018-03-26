@@ -7,6 +7,7 @@ import stat
 import sys
 import time
 
+from collections import defaultdict
 from graph import parse_graph, parse_files
 from proc import run_proc
 from mtime import read_mtimes
@@ -207,12 +208,12 @@ def fuzz_test(project, files):
         if modified != expected:
             over = False
             under = False
-            for f in modified:
+            for f in sorted(modified):
                 if f not in expected:
                     over = True
                     print '  +', f
 
-            for f in expected:
+            for f in sorted(expected):
                 if f not in modified:
                     under = True
                     print '  -', f
@@ -261,6 +262,48 @@ def list_files(project, files):
     for idx, input in zip(range(count), fuzzed):
         print input
 
+
+def test_parse(project, path):
+  """Compares the dynamic graph to the parsed one."""
+
+  inputs, outputs = parse_files(project.tmpPath)
+  graph = parse_graph(project.tmpPath)
+
+  fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
+  count = len(fuzzed)
+  
+  root = project.buildPath
+  
+  G = defaultdict(list)
+  with open(path, 'r') as f:
+    for line in f.readlines():
+      src, deps = line.strip().split(':')
+      src = os.path.normpath(os.path.join(root, src))
+      for dep in (w.strip() for w in deps.split(', ')):
+        G[os.path.normpath(os.path.join(root, dep))].append(src)
+
+  def traverse_graph(node, viz):
+    if node in viz:
+      return viz
+
+    for next in G[node]:
+      viz.add(node)
+      traverse_graph(next, viz)
+    return viz
+
+  for idx, input in zip(range(count), fuzzed):
+      print '[{0}/{1}] {2}:'.format(idx + 1, count, input)
+      
+      expected = graph.find_deps(input) & outputs
+      actual = traverse_graph(input, set())
+      if actual != expected:
+        for f in sorted(actual):
+          if f not in expected:
+            print '  +', f
+
+        for f in sorted(expected):
+          if f not in actual:
+            print '  -', f
 
 def get_project(root, args):
     """Identifies the type of the project."""
@@ -318,6 +361,9 @@ def main():
         return
     if args.cmd == 'list':
         list_files(project, args.files)
+        return
+    if args.cmd == 'parse':
+        test_parse(project, args.files[0])
         return
 
     raise RuntimeError('Unknown command: ' + args.cmd)
