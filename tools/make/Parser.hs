@@ -51,7 +51,9 @@ assignment = Atto.try $ do
   Atto.char '='
 
   let parseValue = anyChar >>= \case
-        '\\' -> char '\n' >> parseValue
+        '\\' -> anyChar >>= \case
+          '\n' -> parseValue
+          c -> (['\\',c]++) <$> parseValue
         '\n' -> return []
         c -> (c:) <$> parseValue
         
