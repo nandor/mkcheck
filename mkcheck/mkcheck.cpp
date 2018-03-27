@@ -115,48 +115,47 @@ private:
 
 
 // -----------------------------------------------------------------------------
+bool IsExecutable(const fs::path &path)
+{
+  struct stat st;
+
+  // Check if file exists.
+  if (stat(path.string().c_str(), &st) != 0) {
+    return false;
+  }
+  // Ensure it is a file.
+  if (!S_ISREG(st.st_mode)) {
+    return false;
+  }
+  // Check if it is user-executable.
+  if (!(st.st_mode & S_IXUSR)) {
+    return false;
+  }
+  return true;
+}
+
+// -----------------------------------------------------------------------------
 std::string FindExecutable(const std::string &exec)
 {
-  size_t m, n, len;
-  struct stat64 st;
-  char pathname[PATH_MAX];
-  for (const char *path = getenv("PATH"); path && *path; path += m) {
-    if (const char *colon = strchr(path, ':')) {
-      n = colon - path;
-      m = n + 1;
-    } else {
-      m = n = strlen(path);
-    }
-
-    if (n == 0) {
-      if (!getcwd(pathname, PATH_MAX)) {
-        continue;
-      }
-      len = strlen(pathname);
-    } else if (n > sizeof(pathname) - 1) {
-      continue;
-    } else {
-      strncpy(pathname, path, n);
-      len = n;
-    }
-
-    if (len && pathname[len - 1] != '/') {
-      pathname[len++] = '/';
-    }
-
-    if (exec.size() + len > sizeof(pathname) - 1) {
-      continue;
-    }
-
-    strcpy(pathname + len, exec.c_str());
-    if (stat64(pathname, &st) != 0) {
-      continue;
-    }
-
-    if (S_ISREG(st.st_mode) && st.st_mode & S_IXUSR) {
-      return pathname;
-    }
+  fs::path candidate = fs::absolute(exec);
+  if (IsExecutable(candidate)) {
+    return candidate.string();
   }
+
+  const char *colon;
+  const char *ptr = getenv("PATH");
+  do {
+    colon = strchr(ptr, ':');
+
+    const fs::path path = std::string(ptr, colon ? colon - ptr : strlen(ptr));
+    
+    candidate = path / exec;
+    if (IsExecutable(candidate)) {
+      return candidate.string();
+    }
+    ptr = colon + 1;
+  } while (colon);
+  
   throw std::runtime_error("Cannot find executable: " + exec);
 }
 
