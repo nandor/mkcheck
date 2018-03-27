@@ -27,6 +27,7 @@ Process::Process(
   , cwd_(cwd)
   , isCOW_(isCOW)
 {
+  inputs_.insert(image);
   for (const auto &fd : fdSet) {
     files_.emplace(fd.Fd, fd);
   }

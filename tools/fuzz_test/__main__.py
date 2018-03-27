@@ -35,6 +35,10 @@ class Project(object):
                 return False
         return True
 
+    def is_output(self, f):
+      """Decides if a file should be considered an output."""
+      return True
+
 
 class Make(Project):
 
@@ -92,10 +96,10 @@ class Make(Project):
 class CMakeProject(Project):
     """Project relying on CMake."""
 
-    def __init__(self, projectPath, tmpPath):
+    def __init__(self, projectPath, buildPath, tmpPath):
         self.projectPath = projectPath
         self.tmpPath = tmpPath
-        self.buildPath = os.path.join(projectPath, 'build')
+        self.buildPath = buildPath
 
         if not os.path.isdir(self.buildPath):
             raise RuntimeError('Missing build directory')
@@ -122,25 +126,47 @@ class CMakeProject(Project):
 
         run_proc(self.BUILD, cwd=self.buildPath)
 
+    FILTER_EXT = [
+      '.h', '.cpp', '.cmake', '.cmake.in', '.c', '.cc', '.C',
+      '.make', '.marks', '.includecache', '.check_cache'
+    ]
+
+    FILTER_FILE = [
+       'CMakeLists.txt', 'flgas.make', 'depend.internal', 'link.txt',
+       'Makefile2', 'Makefile', 'CMakeCache.txt', 'feature_tests.cxx'
+    ]
+
     def filter(self, f):
         """Decides if the file is relevant to the project."""
 
         if not super(CMakeProject, self).filter(f):
             return False
 
-        if f.startswith(self.buildPath):
+        if self.buildPath != self.projectPath and f.startswith(self.buildPath):
             return False
         if not f.startswith(self.projectPath):
             return False
-        for ending in ['.h', '.cpp', '.cmake', '.cmake.in', '.c', '.cc', '.C']:
+        for ending in self.FILTER_EXT:
             if f.endswith(ending):
                 return False
 
         name = os.path.basename(f)
-        if name in ['CMakeLists.txt']:
+        if name in self.FILTER_FILE: 
             return False
-
         return True
+
+    def is_output(self, f):
+        if not super(CMakeProject, self).is_output(f):
+            return False
+        
+        for ending in ['.internal', '.includecache']:
+            if f.endswith(ending):
+                return False
+        name = os.path.basename(f)
+        if name in self.FILTER_FILE: 
+            return False
+        return True
+
 
 
 class CMakeMake(CMakeProject):
@@ -173,17 +199,19 @@ def build_tool():
 def fuzz_test(project, files):
     """Find the set of inputs and outputs, as well as the graph."""
 
+    project.clean()
+    project.build()
+    
     inputs, outputs = parse_files(project.tmpPath)
     graph = parse_graph(project.tmpPath)
     t0 = read_mtimes(outputs)
+  
     
-    project.build()
-
     if len(files) == 0:
         fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
     else:
         fuzzed = [os.path.abspath(f) for f in files]
-
+    
     count = len(fuzzed)
     for idx, input in zip(range(count), fuzzed):
         print '[{0}/{1}] {2}:'.format(idx + 1, count, input)
@@ -202,7 +230,8 @@ def fuzz_test(project, files):
                 modified.add(k)
 
         # Find expected changes.
-        expected = graph.find_deps(input) & outputs
+        deps = graph.find_deps(input)
+        expected = [f for f in deps & outputs if project.is_output(f)]
 
         # Report differences.
         if modified != expected:
@@ -257,7 +286,7 @@ def list_files(project, files):
         fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
     else:
         fuzzed = [os.path.abspath(f) for f in files]
-
+    
     count = len(fuzzed)
     for idx, input in zip(range(count), fuzzed):
         print input
@@ -310,9 +339,14 @@ def get_project(root, args):
 
     if os.path.isfile(os.path.join(root, 'CMakeLists.txt')):
         if os.path.isfile(os.path.join(root, 'build', 'Makefile')):
-            return CMakeMake(root, args.tmp_path)
+            return CMakeMake(root, os.path.join(root, 'build'), args.tmp_path)
+        if os.path.isfile(os.path.join(root, 'Makefile')):
+            return CMakeMake(root, root, args.tmp_path)
+
         if os.path.isfile(os.path.join(root, 'build', 'build.ninja')):
-            return CMakeNinja(root, args.tmp_path)
+            return CMakeNinja(root, os.path.join(root, 'build'), args.tmp_path)
+        if os.path.isfile(os.path.join(root, 'build', 'build.ninja')):
+            return CMakeNinja(root, root, args.tmp_path)
 
     if os.path.isfile(os.path.join(root, 'Makefile')):
         return Make(root, args.tmp_path)
