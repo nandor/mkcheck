@@ -37,6 +37,11 @@ class Project(object):
 
     def is_output(self, f):
       """Decides if a file should be considered an output."""
+      
+      for ending in ['.pyc', '.pyo']:
+          if f.endswith(ending):
+              return False
+      
       return True
 
 
@@ -47,12 +52,12 @@ class Make(Project):
         self.buildPath = root
         self.tmpPath = tmpPath
 
-        code = subprocess.Popen(
-          ['make', 'clean', '--dry-run'], 
-          stdout=subprocess.PIPE,
-          stdin=subprocess.PIPE,
-          cwd=root
-        ).wait()
+        with open(os.devnull, 'w') as devnull:
+          code = subprocess.Popen(
+            ['make', '--dry-run', 'clean'], 
+            stdout=devnull,
+            cwd=root
+          ).wait()
         self.has_clean = code == 0
 
     def clean_build(self):
@@ -128,12 +133,12 @@ class CMakeProject(Project):
 
     FILTER_EXT = [
       '.h', '.cpp', '.cmake', '.cmake.in', '.c', '.cc', '.C',
-      '.make', '.marks', '.includecache', '.check_cache'
+      '.make', '.marks', '.includecache', '.check_cache', '.hpp'
     ]
 
     FILTER_FILE = [
        'CMakeLists.txt', 'flgas.make', 'depend.internal', 'link.txt',
-       'Makefile2', 'Makefile', 'CMakeCache.txt', 'feature_tests.cxx'
+       'Makefile2', 'Makefile', 'CMakeCache.txt', 'feature_tests.cxx',
     ]
 
     def filter(self, f):
@@ -162,9 +167,11 @@ class CMakeProject(Project):
         for ending in ['.internal', '.includecache']:
             if f.endswith(ending):
                 return False
+
         name = os.path.basename(f)
         if name in self.FILTER_FILE: 
             return False
+
         return True
 
 
@@ -226,9 +233,9 @@ def fuzz_test(project, files):
         # Find the set of changed files.
         modified = set()
         for k, v in t0.iteritems():
-            if v != t1[k]:
+            if v != t1[k] and project.is_output(k):
                 modified.add(k)
-
+                
         # Find expected changes.
         deps = graph.find_deps(input)
         expected = [f for f in deps & outputs if project.is_output(f)]
@@ -281,7 +288,6 @@ def list_files(project, files):
 
     inputs, outputs = parse_files(project.tmpPath)
     graph = parse_graph(project.tmpPath)
-
     if len(files) == 0:
         fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
     else:
@@ -338,16 +344,16 @@ def get_project(root, args):
     """Identifies the type of the project."""
 
     if os.path.isfile(os.path.join(root, 'CMakeLists.txt')):
-        if os.path.isfile(os.path.join(root, 'build', 'Makefile')):
+        if os.path.isfile(os.path.join(root, 'build', 'CMakeCache.txt')):
             return CMakeMake(root, os.path.join(root, 'build'), args.tmp_path)
-        if os.path.isfile(os.path.join(root, 'Makefile')):
+        if os.path.isfile(os.path.join(root, 'CMakeCache')):
             return CMakeMake(root, root, args.tmp_path)
 
-        if os.path.isfile(os.path.join(root, 'build', 'build.ninja')):
+        if os.path.isfile(os.path.join(root, 'build', 'CMakeCache.txt')):
             return CMakeNinja(root, os.path.join(root, 'build'), args.tmp_path)
-        if os.path.isfile(os.path.join(root, 'build', 'build.ninja')):
+        if os.path.isfile(os.path.join(root, 'CMakeCache.txt')):
             return CMakeNinja(root, root, args.tmp_path)
-
+    
     if os.path.isfile(os.path.join(root, 'Makefile')):
         return Make(root, args.tmp_path)
 
