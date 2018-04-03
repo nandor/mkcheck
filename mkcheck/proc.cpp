@@ -26,6 +26,7 @@ Process::Process(
   , image_(image)
   , cwd_(cwd)
   , isCOW_(isCOW)
+  , pipeCount_(0)
 {
   inputs_.insert(image);
   for (const auto &fd : fdSet) {
@@ -220,9 +221,10 @@ void Process::DupFd(int from, int to)
 // -----------------------------------------------------------------------------
 void Process::Pipe(int rd, int wr)
 {
-  const fs::path path = "/proc/" + std::to_string(pid_) + "/fd/";
-  const auto pipeRd = path / std::to_string(rd);
-  const auto pipeWr = path / std::to_string(wr);
+  const fs::path path = "/proc/" + std::to_string(pid_) + "/pipes/";
+  const auto pipeRd = path / std::to_string(pipeCount_) / std::to_string(rd);
+  const auto pipeWr = path / std::to_string(pipeCount_) / std::to_string(wr);
+  pipeCount_ += 1;
 
   trace_->AddDependency(pipeWr, pipeRd);
   MapFd(rd, pipeRd);

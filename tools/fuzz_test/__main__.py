@@ -83,8 +83,8 @@ class Make(Project):
     def build(self):
         """Performs an incremental build."""
 
-        run_proc([ "make" ], cwd=self.buildPath)
-
+        run_proc([ "make", "MALLOC=libc"], cwd=self.buildPath)
+    
     def filter(self, f):
         """Decides if the file is relevant to the project."""
 
@@ -133,12 +133,13 @@ class CMakeProject(Project):
 
     FILTER_EXT = [
       '.h', '.cpp', '.cmake', '.cmake.in', '.c', '.cc', '.C',
-      '.make', '.marks', '.includecache', '.check_cache', '.hpp'
+      '.make', '.marks', '.includecache', '.check_cache', '.hpp',
     ]
 
     FILTER_FILE = [
        'CMakeLists.txt', 'flgas.make', 'depend.internal', 'link.txt',
        'Makefile2', 'Makefile', 'CMakeCache.txt', 'feature_tests.cxx',
+       '.ninja_deps', '.ninja_log'
     ]
 
     def filter(self, f):
@@ -218,7 +219,7 @@ def fuzz_test(project, files):
         fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
     else:
         fuzzed = [os.path.abspath(f) for f in files]
-
+    
     count = len(fuzzed)
     for idx, input in zip(range(count), fuzzed):
         print '[{0}/{1}] {2}:'.format(idx + 1, count, input)
@@ -288,6 +289,7 @@ def list_files(project, files):
 
     inputs, outputs, built_by = parse_files(project.tmpPath)
     graph = parse_graph(project.tmpPath)
+    
     if len(files) == 0:
         fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
     else:

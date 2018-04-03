@@ -121,4 +121,7 @@ private:
   std::set<uint64_t> inputs_;
   /// Output files.
   std::set<uint64_t> outputs_;
+
+  /// Number of pipes, used to generate unique names.
+  size_t pipeCount_;
 };
