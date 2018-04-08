@@ -55,7 +55,7 @@ def parse_graph(path):
     for uid, file in files.iteritems():
         for dep in file.get('deps', []):
             graph.add_dependency(files[dep]['name'], files[uid]['name'])
-    
+
     gid = {}
     for proc in sorted(data["procs"], key=lambda p: p["uid"]):
       uid = proc["uid"]
@@ -63,15 +63,15 @@ def parse_graph(path):
         gid[uid] = gid[proc["parent"]]
       else:
         gid[uid] = uid
-  
+
     groups = defaultdict(lambda: (set(), set()))
     for proc in data["procs"]:
       group_id = gid[proc["uid"]]
-      
+
       ins, outs = groups[group_id]
       ins.update(proc.get('input', []))
       outs.update(proc.get('output', []))
-  
+
     for _, (ins, outs) in groups.iteritems():
         for input in ins:
             for output in outs:
@@ -90,6 +90,7 @@ def parse_files(path):
     files = {}
     inputs = set()
     outputs = set()
+    built_by = {}
     with open(path, 'r') as f:
         data = json.loads(f.read())
         for file in data["files"]:
@@ -97,6 +98,9 @@ def parse_files(path):
         for proc in data["procs"]:
             inputs = inputs | set(proc.get('input', []))
             outputs = outputs | set(proc.get('output', []))
+            image = os.path.basename(files[proc['image']]['name'])
+            for output in outputs:
+                built_by[files[output]['name']] = image
 
     def persisted(uid):
         if files[uid].get('deleted', False):
@@ -111,4 +115,4 @@ def parse_files(path):
     inputs = {files[uid]['name'] for uid in inputs if persisted(uid)}
     outputs = {files[uid]['name'] for uid in outputs if persisted(uid)}
 
-    return inputs, outputs
+    return inputs, outputs, built_by

@@ -37,11 +37,11 @@ class Project(object):
 
     def is_output(self, f):
       """Decides if a file should be considered an output."""
-      
+
       for ending in ['.pyc', '.pyo']:
           if f.endswith(ending):
               return False
-      
+
       return True
 
 
@@ -54,7 +54,7 @@ class Make(Project):
 
         with open(os.devnull, 'w') as devnull:
           code = subprocess.Popen(
-            ['make', '--dry-run', 'clean'], 
+            ['make', '--dry-run', 'clean'],
             stdout=devnull,
             cwd=root
           ).wait()
@@ -74,7 +74,7 @@ class Make(Project):
 
     def clean(self):
         """Cleans the project."""
-        
+
         if self.has_clean:
           run_proc([ "make", "clean" ], cwd=self.buildPath)
         else:
@@ -84,17 +84,17 @@ class Make(Project):
         """Performs an incremental build."""
 
         run_proc([ "make" ], cwd=self.buildPath)
-    
+
     def filter(self, f):
         """Decides if the file is relevant to the project."""
 
         if not super(Make, self).filter(f):
             return False
-        
+
         for ending in ['Makefile']:
             if f.endswith(ending):
                 return False
-        
+
         return True
 
 
@@ -156,20 +156,20 @@ class CMakeProject(Project):
                 return False
 
         name = os.path.basename(f)
-        if name in self.FILTER_FILE: 
+        if name in self.FILTER_FILE:
             return False
         return True
 
     def is_output(self, f):
         if not super(CMakeProject, self).is_output(f):
             return False
-        
+
         for ending in ['.internal', '.includecache']:
             if f.endswith(ending):
                 return False
 
         name = os.path.basename(f)
-        if name in self.FILTER_FILE: 
+        if name in self.FILTER_FILE:
             return False
 
         return True
@@ -208,17 +208,17 @@ def fuzz_test(project, files):
 
     project.clean()
     project.build()
-    
-    inputs, outputs = parse_files(project.tmpPath)
+
+    inputs, outputs, built_by = parse_files(project.tmpPath)
     graph = parse_graph(project.tmpPath)
     t0 = read_mtimes(outputs)
-  
-    
+
+
     if len(files) == 0:
         fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
     else:
         fuzzed = [os.path.abspath(f) for f in files]
-    
+
     count = len(fuzzed)
     for idx, input in zip(range(count), fuzzed):
         print '[{0}/{1}] {2}:'.format(idx + 1, count, input)
@@ -235,7 +235,7 @@ def fuzz_test(project, files):
         for k, v in t0.iteritems():
             if v != t1[k] and project.is_output(k):
                 modified.add(k)
-                
+
         # Find expected changes.
         deps = graph.find_deps(input)
         expected = [f for f in deps & outputs if project.is_output(f)]
@@ -247,12 +247,12 @@ def fuzz_test(project, files):
             for f in sorted(modified):
                 if f not in expected:
                     over = True
-                    print '  +', f
+                    print '  + {} ({})'.format(f, built_by[f])
 
             for f in sorted(expected):
                 if f not in modified:
                     under = True
-                    print '  -', f
+                    print '  + {} ({})'.format(f, built_by[f])
 
             if under:
                 project.clean()
@@ -286,13 +286,13 @@ def query(project, files):
 def list_files(project, files):
     """Lists the files in the project to be fuzzed."""
 
-    inputs, outputs = parse_files(project.tmpPath)
+    inputs, outputs, built_by = parse_files(project.tmpPath)
     graph = parse_graph(project.tmpPath)
     if len(files) == 0:
         fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
     else:
         fuzzed = [os.path.abspath(f) for f in files]
-    
+
     count = len(fuzzed)
     for idx, input in zip(range(count), fuzzed):
         print input
@@ -301,14 +301,14 @@ def list_files(project, files):
 def test_parse(project, path):
   """Compares the dynamic graph to the parsed one."""
 
-  inputs, outputs = parse_files(project.tmpPath)
+  inputs, outputs, built_by = parse_files(project.tmpPath)
   graph = parse_graph(project.tmpPath)
 
   fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
   count = len(fuzzed)
-  
+
   root = project.buildPath
-  
+
   G = defaultdict(list)
   with open(path, 'r') as f:
     for line in f.readlines():
@@ -328,7 +328,7 @@ def test_parse(project, path):
 
   for idx, input in zip(range(count), fuzzed):
       print '[{0}/{1}] {2}:'.format(idx + 1, count, input)
-      
+
       expected = graph.find_deps(input) & outputs
       actual = traverse_graph(input, set())
       if actual != expected:
@@ -353,7 +353,7 @@ def get_project(root, args):
             return CMakeNinja(root, os.path.join(root, 'build'), args.tmp_path)
         if os.path.isfile(os.path.join(root, 'CMakeCache.txt')):
             return CMakeNinja(root, root, args.tmp_path)
-    
+
     if os.path.isfile(os.path.join(root, 'Makefile')):
         return Make(root, args.tmp_path)
 

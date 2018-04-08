@@ -23,7 +23,7 @@ $(OUT)/lib_b.o : lib_b/lib_b.c lib_b/lib_b.h
 $(OUT)/a.o : a.c a.h
 	$(CC) -c -o $(OUT)/a.o a.c
 
-$(OUT)/b.o : b.c b.h
+$(OUT)/b.o : b.c b.h a.h c.h
 	$(CC) -c -o $(OUT)/b.o b.c
 
 $(OUT)/c.o : c.c c.h
