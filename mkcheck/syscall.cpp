@@ -203,6 +203,11 @@ static void sys_fcntl(Process *proc, const Args &args)
       case F_SETLKW: {
         break;
       }
+      case F_OFD_GETLK:
+      case F_OFD_SETLK:
+      case F_OFD_SETLKW: {
+        break;
+      }
       default: {
         throw std::runtime_error(
             "Unknown fnctl (cmd = " + std::to_string(cmd) + ")"
@@ -316,6 +321,14 @@ static void sys_readlink(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_utime(Process *proc, const Args &args)
+{
+  if (args.Return >= 0) {
+    proc->AddOutput(proc->Normalise(ReadString(args.PID, args[0])));
+  }
+}
+
+// -----------------------------------------------------------------------------
 static void sys_linkat(Process *proc, const Args &args)
 {
   if (args.Return >= 0) {
@@ -376,7 +389,6 @@ static void sys_openat(Process *proc, const Args &args)
   const int dirfd = args[0];
   const fs::path path = proc->Normalise(dirfd, ReadString(args.PID, args[1]));
   const uint64_t flags = args[2];
-
   if (args.Return >= 0) {
     const int fd = args.Return;
     proc->MapFd(fd, path);
@@ -407,6 +419,19 @@ static void sys_newfstatat(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_renameat(Process *proc, const Args &args)
+{
+  const int odirfd = args[0];
+  const fs::path opath = proc->Normalise(odirfd, ReadString(args.PID, args[1]));
+  const int ndirfd = args[2];
+  const fs::path npath = proc->Normalise(ndirfd, ReadString(args.PID, args[3]));
+
+  if (args.Return >= 0) {
+    proc->Rename(opath, npath);
+  }
+}
+
+// -----------------------------------------------------------------------------
 static void sys_unlinkat(Process *proc, const Args &args)
 {
   const int fd = args[0];
@@ -414,6 +439,16 @@ static void sys_unlinkat(Process *proc, const Args &args)
 
   if (args.Return >= 0) {
     proc->Remove(path);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_readlinkat(Process *proc, const Args &args)
+{
+  const int fd = args[0];
+  const fs::path path = proc->Normalise(fd, ReadString(args.PID, args[1]));
+  if (args.Return >= 0) {
+    proc->AddInput(path);
   }
 }
 
@@ -562,9 +597,11 @@ static const HandlerFn kHandlers[] =
   /* 0x06D */ [SYS_setpgid           ] = sys_ignore,
   /* 0x06E */ [SYS_getppid           ] = sys_ignore,
   /* 0x06F */ [SYS_getpgrp           ] = sys_ignore,
+  /* 0x070 */ [SYS_setsid            ] = sys_ignore,
   /* 0x073 */ [SYS_getgroups         ] = sys_ignore,
   /* 0x07F */ [SYS_rt_sigpending     ] = sys_ignore,
   /* 0x083 */ [SYS_sigaltstack       ] = sys_ignore,
+  /* 0x084 */ [SYS_utime             ] = sys_utime,
   /* 0x087 */ [SYS_personality       ] = sys_ignore,
   /* 0x089 */ [SYS_statfs            ] = sys_ignore,
   /* 0x08A */ [SYS_fstatfs           ] = sys_ignore,
@@ -590,12 +627,16 @@ static const HandlerFn kHandlers[] =
   /* 0x0E7 */ [SYS_exit_group        ] = sys_ignore,
   /* 0x0EA */ [SYS_tgkill            ] = sys_ignore,
   /* 0x0EB */ [SYS_utimes            ] = sys_ignore,
+  /* 0x0F7 */ [SYS_waitid            ] = sys_ignore,
   /* 0x101 */ [SYS_openat            ] = sys_openat,
   /* 0x102 */ [SYS_mkdirat           ] = sys_mkdirat,
   /* 0x106 */ [SYS_newfstatat        ] = sys_newfstatat,
   /* 0x107 */ [SYS_unlinkat          ] = sys_unlinkat,
+  /* 0x108 */ [SYS_renameat          ] = sys_renameat,
+  /* 0x10B */ [SYS_readlinkat        ] = sys_readlinkat,
   /* 0x10C */ [SYS_fchmodat          ] = sys_ignore,
   /* 0x10D */ [SYS_faccessat         ] = sys_faccessat,
+  /* 0x10E */ [SYS_pselect6          ] = sys_ignore,
   /* 0x10F */ [SYS_ppoll             ] = sys_ignore,
   /* 0x111 */ [SYS_set_robust_list   ] = sys_ignore,
   /* 0x113 */ [SYS_splice            ] = sys_splice,

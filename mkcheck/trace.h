@@ -34,6 +34,8 @@ public:
   /// Dumps the trace to a file.
   void Dump(const fs::path &output);
 
+  /// Shares a state between parent and child.
+  void ShareTrace(pid_t parent, pid_t pid);
   /// Spawns a new process.
   void SpawnTrace(pid_t parent, pid_t pid);
   /// Starts a new trace.

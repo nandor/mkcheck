@@ -75,6 +75,16 @@ void Trace::Dump(const fs::path &output)
 }
 
 // -----------------------------------------------------------------------------
+void Trace::ShareTrace(pid_t parent, pid_t pid)
+{
+  auto it = procs_.find(parent);
+  if (it == procs_.end()) {
+    throw std::runtime_error("Process " + std::to_string(parent) + " missing");
+  }
+  procs_.emplace(pid, it->second);
+}
+
+// -----------------------------------------------------------------------------
 void Trace::SpawnTrace(pid_t parent, pid_t pid)
 {
   // Find the working directory.

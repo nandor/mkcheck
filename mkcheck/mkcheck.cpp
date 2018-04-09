@@ -191,6 +191,14 @@ int RunTracer(const fs::path &output, pid_t root)
   // Set of tracked processses.
   std::unordered_map<pid_t, std::shared_ptr<ProcessState>> tracked;
   tracked[root] = std::make_shared<ProcessState>(root);
+  
+  auto GetState = [&tracked](pid_t pid) {
+    auto it = tracked.find(pid);
+    if (it == tracked.end()) {
+      throw std::runtime_error("Invalid PID: " + std::to_string(pid));
+    }
+    return it->second;
+  };
 
   // Processes waiting to be started.
   std::set<pid_t> candidates;
@@ -252,20 +260,33 @@ int RunTracer(const fs::path &output, pid_t root)
       case SIGTRAP: {
         // SIGTRAP is sent with an event number in certain scenarios.
         // Simply restart the process with signal number 0.
-        switch (status >> 16) {
+        const int event = status >> 16;
+        switch (event) {
           case PTRACE_EVENT_FORK:
           case PTRACE_EVENT_VFORK:
           case PTRACE_EVENT_CLONE: {
+            bool shareVM = false;
+            if (event == PTRACE_EVENT_CLONE) {
+              shareVM = GetState(pid)->GetArg(2) & CLONE_VM;
+            }
+            
             // Get the ID of the child process.
             pid_t child;
             ptrace(PTRACE_GETEVENTMSG, pid, 0, &child);
 
             // Set tracing options for the child.
             ptrace(PTRACE_SETOPTIONS, pid, nullptr, kTraceOptions);
-
+            
             // Create an object tracking the process, if one does not exist yet.
             tracked.emplace(child, std::make_shared<ProcessState>(child));
-            trace->SpawnTrace(pid, child);
+            
+            if (shareVM) {
+              // Shared the parent's structure with the child thread.
+              trace->ShareTrace(pid, child);
+            } else {
+              // Spawn a new tracking state for the child.
+              trace->SpawnTrace(pid, child);
+            }
 
             // Start tracking it.
             candidates.insert(child);
@@ -298,14 +319,7 @@ int RunTracer(const fs::path &output, pid_t root)
     }
 
     // Fetch the state desribing the process.
-    std::shared_ptr<ProcessState> state;
-    {
-      auto it = tracked.find(pid);
-      if (it == tracked.end()) {
-        throw std::runtime_error("Invalid PID: " + std::to_string(pid));
-      }
-      state = it->second;
-    }
+    std::shared_ptr<ProcessState> state = GetState(pid);
 
     // Read syscall arguments on entry & the return value on exit.
     struct user_regs_struct regs;
@@ -327,9 +341,9 @@ int RunTracer(const fs::path &output, pid_t root)
         }
         break;
       }
-      case SYS_clone:
       case SYS_vfork:
-      case SYS_fork: {
+      case SYS_fork: 
+      case SYS_clone: {
         // Try to wait for the exit event of this sycall before any others.
         waitFor = state->IsExiting() ? -1 : pid;
         break;
