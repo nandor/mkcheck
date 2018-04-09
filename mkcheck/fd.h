@@ -21,6 +21,8 @@ struct FDInfo final {
   fs::path Path;
   /// Close-On-Exec flag.
   bool CloseExec;
+  /// Flag indicating if the FD was closed or not.
+  bool Closed;
 
   /// Constructs an empty file descriptor.
   FDInfo();

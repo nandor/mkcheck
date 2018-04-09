@@ -10,6 +10,7 @@
 #include <string>
 
 #include <fcntl.h>
+#include <sys/eventfd.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -141,7 +142,6 @@ static void sys_pipe(Process *proc, const Args &args)
 {
   int fds[2];
   ReadBuffer(args.PID, fds, args[0], 2 * sizeof(int));
-
   if (args.Return >= 0) {
     proc->Pipe(fds[0], fds[1]);
   }
@@ -389,6 +389,15 @@ static void sys_flistxattr(Process *proc, const Args &args)
   throw std::runtime_error("not implemented");
 }
 
+
+// -----------------------------------------------------------------------------
+static void sys_epoll_create(Process *proc, const Args &args)
+{
+  if (args.Return >= 0) {
+    proc->MapFd(args.Return, "/proc/" + std::to_string(args.PID) + "/epoll");
+  }
+}
+
 // -----------------------------------------------------------------------------
 static void sys_getdents64(Process *proc, const Args &args)
 {
@@ -488,6 +497,18 @@ static void sys_fallocate(Process *proc, const Args &args)
 {
   if (args.Return >= 0) {
     proc->AddOutput(args[0]);
+  }
+}
+
+// -----------------------------------------------------------------------------
+static void sys_eventfd2(Process *proc, const Args &args)
+{
+  const int flags = args[1];
+  const int fd = args.Return;
+
+  if (args.Return >= 0) {
+    proc->MapFd(fd, "/proc/" + std::to_string(args.PID) + "/event");
+    proc->SetCloseExec(fd, flags & EFD_CLOEXEC);
   }
 }
 
@@ -633,13 +654,21 @@ static const HandlerFn kHandlers[] =
   /* 0x0CA */ [SYS_futex             ] = sys_ignore,
   /* 0x0CB */ [SYS_sched_setaffinity ] = sys_ignore,
   /* 0x0CC */ [SYS_sched_getaffinity ] = sys_ignore,
+  /* 0x0D5 */ [SYS_epoll_create      ] = sys_epoll_create,
   /* 0x0D9 */ [SYS_getdents64        ] = sys_getdents64,
   /* 0x0DA */ [SYS_set_tid_address   ] = sys_ignore,
   /* 0x0DB */ [SYS_restart_syscall   ] = sys_ignore,
+  /* 0x0DE */ [SYS_timer_create      ] = sys_ignore,
+  /* 0x0DF */ [SYS_timer_settime     ] = sys_ignore,
+  /* 0x0E0 */ [SYS_timer_gettime     ] = sys_ignore,
+  /* 0x0E1 */ [SYS_timer_getoverrun  ] = sys_ignore,
+  /* 0x0E2 */ [SYS_timer_delete      ] = sys_ignore,
   /* 0x0DD */ [SYS_fadvise64         ] = sys_ignore,
   /* 0x0E4 */ [SYS_clock_gettime     ] = sys_ignore,
   /* 0x0E5 */ [SYS_clock_getres      ] = sys_ignore,
   /* 0x0E7 */ [SYS_exit_group        ] = sys_ignore,
+  /* 0x0E8 */ [SYS_epoll_wait        ] = sys_ignore,
+  /* 0x0E9 */ [SYS_epoll_ctl         ] = sys_ignore,
   /* 0x0EA */ [SYS_tgkill            ] = sys_ignore,
   /* 0x0EB */ [SYS_utimes            ] = sys_ignore,
   /* 0x0F7 */ [SYS_waitid            ] = sys_ignore,
@@ -656,8 +685,9 @@ static const HandlerFn kHandlers[] =
   /* 0x111 */ [SYS_set_robust_list   ] = sys_ignore,
   /* 0x113 */ [SYS_splice            ] = sys_splice,
   /* 0x118 */ [SYS_utimensat         ] = sys_ignore,
+  /* 0x119 */ [SYS_epoll_pwait       ] = sys_ignore,
   /* 0x11D */ [SYS_fallocate         ] = sys_fallocate,
-  /* 0x122 */ [SYS_eventfd2          ] = sys_ignore,
+  /* 0x122 */ [SYS_eventfd2          ] = sys_eventfd2,
   /* 0x123 */ [SYS_epoll_create1     ] = sys_ignore,
   /* 0x124 */ [SYS_dup3              ] = sys_dup3,
   /* 0x125 */ [SYS_pipe2             ] = sys_pipe2,

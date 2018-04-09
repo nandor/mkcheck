@@ -8,9 +8,7 @@
 
 // -----------------------------------------------------------------------------
 FDInfo::FDInfo()
-  : Fd(0)
-  , Path("/dev/null")
-  , CloseExec(false)
+  : FDInfo(0, "/dev/null", false)
 {
 }
 
@@ -19,6 +17,7 @@ FDInfo::FDInfo(int fd, const fs::path &path, bool closeExec)
   : Fd(fd)
   , Path(path)
   , CloseExec(closeExec)
+  , Closed(false)
 {
 }
 

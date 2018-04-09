@@ -232,7 +232,10 @@ void Process::Pipe(int rd, int wr)
 // -----------------------------------------------------------------------------
 void Process::CloseFd(int fd)
 {
-  files_.erase(fd);
+  auto it = files_.find(fd);
+  if (it != files_.end()) {
+    it->second.Closed = true;
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -263,7 +266,7 @@ FDSet Process::GetInheritedFDs()
   FDSet fdSet;
   for (const auto &file : files_) {
     const auto &info = file.second;
-    if (!info.CloseExec) {
+    if (!info.CloseExec && !info.Closed) {
       fdSet.push_back(info);
     }
   }
