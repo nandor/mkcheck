@@ -284,6 +284,20 @@ static void sys_rmdir(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_link(Process *proc, const Args &args)
+{
+  if (args.Return >= 0) {
+    const fs::path srcRel = ReadString(args.PID, args[0]);
+    const fs::path dstRel = ReadString(args.PID, args[1]);
+
+    const fs::path src = proc->Normalise(srcRel);
+    const fs::path dstParent = proc->Normalise(dstRel.parent_path());
+
+    proc->Link(src, dstParent / dstRel.filename());
+  }
+}
+
+// -----------------------------------------------------------------------------
 static void sys_unlink(Process *proc, const Args &args)
 {
   const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
@@ -578,6 +592,7 @@ static const HandlerFn kHandlers[] =
   /* 0x052 */ [SYS_rename            ] = sys_rename,
   /* 0x053 */ [SYS_mkdir             ] = sys_mkdir,
   /* 0x054 */ [SYS_rmdir             ] = sys_rmdir,
+  /* 0x056 */ [SYS_link              ] = sys_link,
   /* 0x057 */ [SYS_unlink            ] = sys_unlink,
   /* 0x058 */ [SYS_symlink           ] = sys_symlink,
   /* 0x059 */ [SYS_readlink          ] = sys_readlink,
