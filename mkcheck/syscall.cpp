@@ -582,6 +582,7 @@ static const HandlerFn kHandlers[] =
   /* 0x020 */ [SYS_dup               ] = sys_dup,
   /* 0x021 */ [SYS_dup2              ] = sys_dup2,
   /* 0x023 */ [SYS_nanosleep         ] = sys_ignore,
+  /* 0x025 */ [SYS_alarm             ] = sys_ignore,
   /* 0x026 */ [SYS_setitimer         ] = sys_ignore,
   /* 0x027 */ [SYS_getpid            ] = sys_ignore,
   /* 0x029 */ [SYS_socket            ] = sys_socket,

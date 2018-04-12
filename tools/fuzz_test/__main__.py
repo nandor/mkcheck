@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import resource
 import subprocess
 import stat
 import sys
@@ -33,6 +34,9 @@ class Project(object):
         for ending in ['.pyc']:
             if f.endswith(ending):
                 return False
+        if os.path.basename(f).startswith('.'):
+          return False
+
         return True
 
     def is_output(self, f):
@@ -41,6 +45,9 @@ class Project(object):
       for ending in ['.pyc', '.pyo']:
           if f.endswith(ending):
               return False
+      
+      if os.path.basename(f).startswith('.'):
+        return False
 
       return True
 
@@ -94,6 +101,55 @@ class Make(Project):
         for ending in ['Makefile']:
             if f.endswith(ending):
                 return False
+
+        return True
+
+
+class SCons(Project):
+
+    def __init__(self, root, tmpPath):
+        self.projectPath = root
+        self.buildPath = root
+        self.tmpPath = tmpPath
+
+    def clean_build(self):
+        """Performs a clean build of the project."""
+
+        # Clean the project.
+        self.clean()
+
+        # Run the build with mkcheck.
+        run_proc(
+          [ TOOL_PATH, "--output={0}".format(self.tmpPath), "--", "make" ],
+          cwd=self.buildPath
+        )
+
+    def clean(self):
+        """Cleans the project."""
+        
+        run_proc([ "scons", "-c" ], cwd=self.buildPath)
+
+    def build(self):
+        """Performs an incremental build."""
+
+        run_proc([ "scons" ], cwd=self.buildPath)
+    
+    def filter(self, f):
+        """Decides if the file is relevant to the project."""
+
+        if not super(SCons, self).filter(f):
+            return False
+        
+        if not f.startswith(self.projectPath):
+            return False
+
+        for ending in ['.c', '.h']:
+            if f.endswith(ending):
+                return False
+
+        name = os.path.basename(f)
+        if name in ['SConscript', 'SConstruct']: 
+            return False
 
         return True
 
@@ -226,6 +282,7 @@ def fuzz_test(project, files):
 
         # Touch the file.
         os.utime(input, None)
+
         # Run the incremental build.
         project.build()
 
@@ -277,7 +334,7 @@ def query(project, files):
                 if dep.startswith(dir):
                     skip = True
                     break
-            if dep == path or skip:
+            if dep == path or skip or not project.is_output(dep):
                 continue
             if dep.startswith(project.projectPath):
                 dep = dep[len(project.projectPath) + 1:]
@@ -344,20 +401,28 @@ def test_parse(project, path):
 
 def get_project(root, args):
     """Identifies the type of the project."""
-
+  
+    # Out-of-source CMake build.
+    if os.path.isfile(os.path.join(root, 'CMakeCache.txt')):
+        if os.path.isfile(os.path.join(root, 'Makefile')):
+            return CMakeMake(os.path.join(root, os.pardir), root, args.tmp_path)
+        if os.path.isfile(os.path.join(root, 'build.ninja')):
+            return CMakeNinja(os.path.join(root, os.pardir), root, args.tmp_path)
+    
+    # In-source CMake build.
     if os.path.isfile(os.path.join(root, 'CMakeLists.txt')):
-        if os.path.isfile(os.path.join(root, 'build', 'CMakeCache.txt')):
-            return CMakeMake(root, os.path.join(root, 'build'), args.tmp_path)
-        if os.path.isfile(os.path.join(root, 'CMakeCache')):
+        if os.path.isfile(os.path.join(root, 'Makefile')):
             return CMakeMake(root, root, args.tmp_path)
-
-        if os.path.isfile(os.path.join(root, 'build', 'CMakeCache.txt')):
-            return CMakeNinja(root, os.path.join(root, 'build'), args.tmp_path)
-        if os.path.isfile(os.path.join(root, 'CMakeCache.txt')):
+        if os.path.isfile(os.path.join(root, 'build.ninja')):
             return CMakeNinja(root, root, args.tmp_path)
-
+      
+    # Manual GNU Make build.
     if os.path.isfile(os.path.join(root, 'Makefile')):
         return Make(root, args.tmp_path)
+
+    # SCons build.
+    if os.path.isfile(os.path.join(root, 'SConstruct')):
+        return SCons(root, args.tmp_path)
 
     raise RuntimeError('Unknown project type')
 
@@ -375,7 +440,7 @@ def main():
         'cmd',
         metavar='COMMAND',
         type=str,
-        help='Command (query/fuzz)'
+        help='Command (query/fuzz/list)'
     )
     parser.add_argument(
         'files',
@@ -413,4 +478,6 @@ def main():
 
 
 if __name__ == '__main__':
+    resource.setrlimit(resource.RLIMIT_STACK, (2 ** 29, -1))
+    sys.setrecursionlimit(10 ** 6)
     main()
