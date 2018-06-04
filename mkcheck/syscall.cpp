@@ -298,6 +298,19 @@ static void sys_link(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_creat(Process *proc, const Args &args)
+{
+  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
+  const uint64_t flags = args[1];
+  
+  if (args.Return >= 0) {
+    const int fd = args.Return;
+    proc->MapFd(fd, path);
+    proc->SetCloseExec(fd, flags & O_CLOEXEC);
+  }
+}
+
+// -----------------------------------------------------------------------------
 static void sys_unlink(Process *proc, const Args &args)
 {
   const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
@@ -614,6 +627,7 @@ static const HandlerFn kHandlers[] =
   /* 0x052 */ [SYS_rename            ] = sys_rename,
   /* 0x053 */ [SYS_mkdir             ] = sys_mkdir,
   /* 0x054 */ [SYS_rmdir             ] = sys_rmdir,
+  /* 0x055 */ [SYS_creat             ] = sys_creat,
   /* 0x056 */ [SYS_link              ] = sys_link,
   /* 0x057 */ [SYS_unlink            ] = sys_unlink,
   /* 0x058 */ [SYS_symlink           ] = sys_symlink,
@@ -635,6 +649,7 @@ static const HandlerFn kHandlers[] =
   /* 0x06E */ [SYS_getppid           ] = sys_ignore,
   /* 0x06F */ [SYS_getpgrp           ] = sys_ignore,
   /* 0x070 */ [SYS_setsid            ] = sys_ignore,
+  /* 0x071 */ [SYS_setreuid          ] = sys_ignore,
   /* 0x073 */ [SYS_getgroups         ] = sys_ignore,
   /* 0x07F */ [SYS_rt_sigpending     ] = sys_ignore,
   /* 0x083 */ [SYS_sigaltstack       ] = sys_ignore,

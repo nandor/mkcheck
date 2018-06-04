@@ -76,7 +76,13 @@ def parse_graph(path):
         for input in ins:
             if files[input]['name'] in ['/dev/stderr', '/dev/stdout']:
               continue
+            if os.path.isdir(files[input]['name']):
+              continue
+
             for output in outs:
+                if os.path.isdir(files[output]['name']):
+                  continue
+
                 graph.add_dependency(
                     files[input]['name'],
                     files[output]['name']

@@ -142,8 +142,11 @@ class SCons(Project):
         
         if not f.startswith(self.projectPath):
             return False
-
-        for ending in ['.c', '.h']:
+        
+        if 'scons' in f or '.sconf_temp' in f:
+            return False
+        
+        for ending in ['.c', '.h', '.cc', '.cpp', '.hpp', '.i', '.ipp', '.o']:
             if f.endswith(ending):
                 return False
 
@@ -203,9 +206,9 @@ class CMakeProject(Project):
 
         if not super(CMakeProject, self).filter(f):
             return False
-
         if self.buildPath != self.projectPath and f.startswith(self.buildPath):
             return False
+        
         if not f.startswith(self.projectPath):
             return False
         for ending in self.FILTER_EXT:
@@ -270,7 +273,6 @@ def fuzz_test(project, files):
     graph = parse_graph(project.tmpPath)
     t0 = read_mtimes(outputs)
 
-
     if len(files) == 0:
         fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
     else:
@@ -297,7 +299,7 @@ def fuzz_test(project, files):
         # Find expected changes.
         deps = graph.find_deps(input)
         expected = [f for f in deps & outputs if project.is_output(f)]
-
+        
         # Report differences.
         if modified != expected:
             over = False
@@ -310,7 +312,7 @@ def fuzz_test(project, files):
             for f in sorted(expected):
                 if f not in modified:
                     under = True
-                    print '  + {} ({})'.format(f, built_by[f])
+                    print '  - {} ({})'.format(f, built_by[f])
 
             if under:
                 project.clean()
@@ -323,6 +325,7 @@ def fuzz_test(project, files):
 def query(project, files):
     """Queries the dependencies of a set of files."""
 
+    _, _, built_by = parse_files(project.tmpPath)
     graph = parse_graph(project.tmpPath)
 
     for f in files:
@@ -351,7 +354,7 @@ def list_files(project, files):
         fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
     else:
         fuzzed = [os.path.abspath(f) for f in files]
-
+    
     count = len(fuzzed)
     for idx, input in zip(range(count), fuzzed):
         print input
@@ -404,10 +407,11 @@ def get_project(root, args):
   
     # Out-of-source CMake build.
     if os.path.isfile(os.path.join(root, 'CMakeCache.txt')):
+        projectDir = os.path.normpath(os.path.join(root, os.pardir))
         if os.path.isfile(os.path.join(root, 'Makefile')):
-            return CMakeMake(os.path.join(root, os.pardir), root, args.tmp_path)
+            return CMakeMake(projectDir, root, args.tmp_path)
         if os.path.isfile(os.path.join(root, 'build.ninja')):
-            return CMakeNinja(os.path.join(root, os.pardir), root, args.tmp_path)
+            return CMakeNinja(projectDir, root, args.tmp_path)
     
     # In-source CMake build.
     if os.path.isfile(os.path.join(root, 'CMakeLists.txt')):
