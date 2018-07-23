@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include "c.h"
 #include "a.h"
+#include "d.h"
 
 void c()
 {

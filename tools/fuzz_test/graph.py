@@ -38,6 +38,14 @@ class DependencyGraph(object):
         traverse(src)
         return deps
 
+    def prune_transitive(self, nodes):
+        non_transitive = nodes
+        for node in nodes:
+            if node not in non_transitive:
+                continue
+            non_transitive = non_transitive - (self.find_deps(node) - {node})
+        return non_transitive
+
 
 def parse_graph(path):
     """Constructs the dependency graph based on files."""

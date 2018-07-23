@@ -397,6 +397,15 @@ static void sys_lgetxattr(Process *proc, const Args &args)
 }
 
 // -----------------------------------------------------------------------------
+static void sys_llistxattr(Process *proc, const Args &args)
+{
+  const fs::path path = proc->Normalise(ReadString(args.PID, args[0]));
+  if (args.Return >= 0) {
+      proc->AddInput(path);
+  }
+}
+
+// -----------------------------------------------------------------------------
 static void sys_flistxattr(Process *proc, const Args &args)
 {
   throw std::runtime_error("not implemented");
@@ -665,6 +674,7 @@ static const HandlerFn kHandlers[] =
   /* 0x0BE */ [SYS_fsetxattr         ] = sys_fsetxattr,
   /* 0x0BF */ [SYS_getxattr          ] = sys_getxattr,
   /* 0x0C0 */ [SYS_lgetxattr         ] = sys_lgetxattr,
+  /* 0x0C3 */ [SYS_llistxattr        ] = sys_llistxattr,
   /* 0x0C4 */ [SYS_flistxattr        ] = sys_flistxattr,
   /* 0x0C9 */ [SYS_time              ] = sys_ignore,
   /* 0x0CA */ [SYS_futex             ] = sys_ignore,

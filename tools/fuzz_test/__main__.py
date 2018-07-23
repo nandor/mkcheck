@@ -102,6 +102,14 @@ class Make(Project):
             if f.endswith(ending):
                 return False
 
+        if 'linux' in self.buildPath:
+            if 'Documentation' in f or 'Kconfig' in f:
+                return False
+
+            for ending in ['.c', '.h', '.order', 'README', 'Kbuild', 'TODO']:
+                if f.endswith(ending):
+                    return False 
+
         return True
 
 
@@ -120,7 +128,7 @@ class SCons(Project):
 
         # Run the build with mkcheck.
         run_proc(
-          [ TOOL_PATH, "--output={0}".format(self.tmpPath), "--", "make" ],
+          [ TOOL_PATH, "--output={0}".format(self.tmpPath), "--", "scons" ],
           cwd=self.buildPath
         )
 
@@ -132,7 +140,7 @@ class SCons(Project):
     def build(self):
         """Performs an incremental build."""
 
-        run_proc([ "scons" ], cwd=self.buildPath)
+        run_proc([ "scons", "-Q" ], cwd=self.buildPath)
     
     def filter(self, f):
         """Decides if the file is relevant to the project."""
@@ -203,7 +211,7 @@ class CMakeProject(Project):
 
     def filter(self, f):
         """Decides if the file is relevant to the project."""
-
+        
         if not super(CMakeProject, self).filter(f):
             return False
         if self.buildPath != self.projectPath and f.startswith(self.buildPath):
@@ -298,21 +306,22 @@ def fuzz_test(project, files):
 
         # Find expected changes.
         deps = graph.find_deps(input)
-        expected = [f for f in deps & outputs if project.is_output(f)]
+        expected = {f for f in deps & outputs if project.is_output(f)}
         
         # Report differences.
         if modified != expected:
             over = False
             under = False
-            for f in sorted(modified):
-                if f not in expected:
-                    over = True
-                    print '  + {} ({})'.format(f, built_by[f])
 
-            for f in sorted(expected):
-                if f not in modified:
-                    under = True
-                    print '  - {} ({})'.format(f, built_by[f])
+            redundant = modified - expected
+            for f in sorted(redundant):
+                over = True
+                print '  + {} ({})'.format(f, built_by[f])
+            
+            missing = graph.prune_transitive(expected - modified)
+            for f in sorted(missing):
+                under = True
+                print '  - {} ({})'.format(f, built_by[f])
 
             if under:
                 project.clean()
@@ -360,7 +369,7 @@ def list_files(project, files):
         print input
 
 
-def test_parse(project, path):
+def parse_test(project, path):
   """Compares the dynamic graph to the parsed one."""
 
   inputs, outputs, built_by = parse_files(project.tmpPath)
@@ -404,6 +413,13 @@ def test_parse(project, path):
 
 def get_project(root, args):
     """Identifies the type of the project."""
+    
+    # In-source CMake build.
+    if os.path.isfile(os.path.join(root, 'CMakeLists.txt')):
+        if os.path.isfile(os.path.join(root, 'Makefile')):
+            return CMakeMake(root, root, args.tmp_path)
+        if os.path.isfile(os.path.join(root, 'build.ninja')):
+            return CMakeNinja(root, root, args.tmp_path)
   
     # Out-of-source CMake build.
     if os.path.isfile(os.path.join(root, 'CMakeCache.txt')):
@@ -413,13 +429,6 @@ def get_project(root, args):
         if os.path.isfile(os.path.join(root, 'build.ninja')):
             return CMakeNinja(projectDir, root, args.tmp_path)
     
-    # In-source CMake build.
-    if os.path.isfile(os.path.join(root, 'CMakeLists.txt')):
-        if os.path.isfile(os.path.join(root, 'Makefile')):
-            return CMakeMake(root, root, args.tmp_path)
-        if os.path.isfile(os.path.join(root, 'build.ninja')):
-            return CMakeNinja(root, root, args.tmp_path)
-      
     # Manual GNU Make build.
     if os.path.isfile(os.path.join(root, 'Makefile')):
         return Make(root, args.tmp_path)
@@ -474,7 +483,7 @@ def main():
         list_files(project, args.files)
         return
     if args.cmd == 'parse':
-        test_parse(project, args.files[0])
+        parse_test(project, args.files[0])
         return
 
     raise RuntimeError('Unknown command: ' + args.cmd)
