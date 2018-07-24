@@ -112,10 +112,13 @@ def parse_files(path):
         for file in data["files"]:
             files[file['id']] = file
         for proc in data["procs"]:
-            inputs = inputs | set(proc.get('input', []))
-            outputs = outputs | set(proc.get('output', []))
+            proc_in = set(proc.get('input', []))
+            proc_out = set(proc.get('output', []))
+
+            inputs = inputs | proc_in
+            outputs = outputs | proc_out
             image = os.path.basename(files[proc['image']]['name'])
-            for output in outputs:
+            for output in proc_out:
                 built_by[files[output]['name']] = image
 
     def persisted(uid):

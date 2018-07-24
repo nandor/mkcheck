@@ -6,6 +6,7 @@ import resource
 import subprocess
 import stat
 import sys
+import tempfile
 import time
 
 from collections import defaultdict
@@ -50,6 +51,21 @@ class Project(object):
         return False
 
       return True
+
+    def touch(self, path):
+        """Adjusts the content hash/timestamp of a file."""
+        
+        class TouchContext(object):
+            def __init__(self):
+                os.utime(path, None)
+            
+            def __enter__(self): 
+                pass
+            
+            def __exit__(self, type, value, tb): 
+                pass
+
+        return TouchContext()
 
 
 class Make(Project):
@@ -135,7 +151,7 @@ class SCons(Project):
     def clean(self):
         """Cleans the project."""
         
-        run_proc([ "scons", "-c" ], cwd=self.buildPath)
+        run_proc([ "scons", "--clean" ], cwd=self.buildPath)
 
     def build(self):
         """Performs an incremental build."""
@@ -163,6 +179,33 @@ class SCons(Project):
             return False
 
         return True
+    
+    def touch(self, path):
+        """Adjusts the content hash/timestamp of a file."""
+        
+        class TouchContext(object):
+            def __init__(self):
+                self.tmp = tempfile.TemporaryFile()
+            
+            def __enter__(self):
+                with open(path, 'rb') as f:
+                    self.tmp.write(f.read())
+
+                with open(path, 'ab') as f:
+                    is_text = False
+                    for ext in ['.conf', '.l', 'VERSION', 'imgdesc']:
+                        if path.endswith(ext):
+                            is_text = True
+                            break
+                    f.write('\n' if is_text else '\0')
+            
+            def __exit__(self, type, value, tb):
+                self.tmp.seek(0)
+                with open(path, 'wb') as f:
+                    f.write(self.tmp.read())
+                self.tmp.close()
+
+        return TouchContext()
 
 
 class CMakeProject(Project):
@@ -290,13 +333,10 @@ def fuzz_test(project, files):
     for idx, input in zip(range(count), fuzzed):
         print '[{0}/{1}] {2}:'.format(idx + 1, count, input)
 
-        # Touch the file.
-        os.utime(input, None)
-
-        # Run the incremental build.
-        project.build()
-
-        t1 = read_mtimes(outputs)
+        # Touch the file, run the incremental build and read timestamps.
+        with project.touch(input):
+            project.build()
+            t1 = read_mtimes(outputs)
 
         # Find the set of changed files.
         modified = set()
