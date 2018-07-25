@@ -242,8 +242,10 @@ class CMakeProject(Project):
         run_proc(self.BUILD, cwd=self.buildPath)
 
     FILTER_EXT = [
-      '.h', '.cpp', '.cmake', '.cmake.in', '.c', '.cc', '.C',
-      '.make', '.marks', '.includecache', '.check_cache', '.hpp',
+      '.cpp', '.cmake', '.cmake.in', '.c', '.cc', '.C',
+      '.make', '.marks', '.includecache', '.check_cache',
+      # Only for very large projects.
+      '.h', '.hpp', '.inl'
     ]
 
     FILTER_FILE = [
@@ -398,7 +400,6 @@ def list_files(project, files):
 
     inputs, outputs, built_by = parse_files(project.tmpPath)
     graph = parse_graph(project.tmpPath)
-    
     if len(files) == 0:
         fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
     else:
@@ -453,14 +454,7 @@ def parse_test(project, path):
 
 def get_project(root, args):
     """Identifies the type of the project."""
-    
-    # In-source CMake build.
-    if os.path.isfile(os.path.join(root, 'CMakeLists.txt')):
-        if os.path.isfile(os.path.join(root, 'Makefile')):
-            return CMakeMake(root, root, args.tmp_path)
-        if os.path.isfile(os.path.join(root, 'build.ninja')):
-            return CMakeNinja(root, root, args.tmp_path)
-  
+     
     # Out-of-source CMake build.
     if os.path.isfile(os.path.join(root, 'CMakeCache.txt')):
         projectDir = os.path.normpath(os.path.join(root, os.pardir))
@@ -468,6 +462,13 @@ def get_project(root, args):
             return CMakeMake(projectDir, root, args.tmp_path)
         if os.path.isfile(os.path.join(root, 'build.ninja')):
             return CMakeNinja(projectDir, root, args.tmp_path)
+
+    # In-source CMake build.
+    if os.path.isfile(os.path.join(root, 'CMakeCache.txt')):
+        if os.path.isfile(os.path.join(root, 'Makefile')):
+            return CMakeMake(root, root, args.tmp_path)
+        if os.path.isfile(os.path.join(root, 'build.ninja')):
+            return CMakeNinja(root, root, args.tmp_path)
     
     # Manual GNU Make build.
     if os.path.isfile(os.path.join(root, 'Makefile')):
