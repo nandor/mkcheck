@@ -1,0 +1,12 @@
+#pragma once
+
+void b();
+
+--
+#include <stdio.h>
+
+void b()
+{
+  printf("b\n");
+}
+
