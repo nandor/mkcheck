@@ -10,7 +10,7 @@ import tempfile
 import time
 
 from collections import defaultdict
-from graph import parse_graph, parse_files
+from graph import parse_graph
 from proc import run_proc
 from mtime import read_mtimes
 
@@ -25,7 +25,7 @@ TOOL_PATH = os.path.join(PROJECT_PATH, 'build', 'mkcheck')
 class Project(object):
     """Generic project: automake, cmake, make etc."""
 
-    def filter(self, f):
+    def filter_in(self, f):
         """Decides if the file is relevant to the project."""
 
         if not os.access(f, os.W_OK):
@@ -38,6 +38,9 @@ class Project(object):
         if os.path.basename(f).startswith('.'):
           return False
 
+        return True
+
+    def filter_tmp(self, f):
         return True
 
     def is_output(self, f):
@@ -57,7 +60,9 @@ class Project(object):
         
         class TouchContext(object):
             def __init__(self):
+                time.sleep(0.01)
                 os.utime(path, None)
+                time.sleep(0.01)
             
             def __enter__(self): 
                 pass
@@ -108,10 +113,10 @@ class Make(Project):
 
         run_proc([ "make", "MALLOC=libc"], cwd=self.buildPath)
     
-    def filter(self, f):
+    def filter_in(self, f):
         """Decides if the file is relevant to the project."""
 
-        if not super(Make, self).filter(f):
+        if not super(Make, self).filter_in(f):
             return False
 
         for ending in ['Makefile']:
@@ -158,10 +163,10 @@ class SCons(Project):
 
         run_proc([ "scons", "-Q" ], cwd=self.buildPath)
     
-    def filter(self, f):
+    def filter_in(self, f):
         """Decides if the file is relevant to the project."""
 
-        if not super(SCons, self).filter(f):
+        if not super(SCons, self).filter_in(f):
             return False
         
         if not f.startswith(self.projectPath):
@@ -254,10 +259,10 @@ class CMakeProject(Project):
        '.ninja_deps', '.ninja_log'
     ]
 
-    def filter(self, f):
+    def filter_in(self, f):
         """Decides if the file is relevant to the project."""
         
-        if not super(CMakeProject, self).filter(f):
+        if not super(CMakeProject, self).filter_in(f):
             return False
         if self.buildPath != self.projectPath and f.startswith(self.buildPath):
             return False
@@ -322,12 +327,11 @@ def fuzz_test(project, files):
     project.clean()
     project.build()
 
-    inputs, outputs, built_by = parse_files(project.tmpPath)
-    graph = parse_graph(project.tmpPath)
+    inputs, outputs, built_by, graph = parse_graph(project.tmpPath)
     t0 = read_mtimes(outputs)
 
     if len(files) == 0:
-        fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
+        fuzzed = sorted([f for f in inputs - outputs if project.filter_in(f)])
     else:
         fuzzed = [os.path.abspath(f) for f in files]
     
@@ -376,8 +380,7 @@ def fuzz_test(project, files):
 def query(project, files):
     """Queries the dependencies of a set of files."""
 
-    _, _, built_by = parse_files(project.tmpPath)
-    graph = parse_graph(project.tmpPath)
+    _, _, built_by, graph = parse_graph(project.tmpPath)
 
     for f in files:
         path = os.path.abspath(f)
@@ -398,10 +401,9 @@ def query(project, files):
 def list_files(project, files):
     """Lists the files in the project to be fuzzed."""
 
-    inputs, outputs, built_by = parse_files(project.tmpPath)
-    graph = parse_graph(project.tmpPath)
+    inputs, outputs, built_by, graph = parse_graph(project.tmpPath)
     if len(files) == 0:
-        fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
+        fuzzed = sorted([f for f in inputs - outputs if project.filter_in(f)])
     else:
         fuzzed = [os.path.abspath(f) for f in files]
     
@@ -413,10 +415,9 @@ def list_files(project, files):
 def parse_test(project, path):
   """Compares the dynamic graph to the parsed one."""
 
-  inputs, outputs, built_by = parse_files(project.tmpPath)
-  graph = parse_graph(project.tmpPath)
+  inputs, outputs, built_by, graph = parse_graph(project.tmpPath)
 
-  fuzzed = sorted([f for f in inputs - outputs if project.filter(f)])
+  fuzzed = sorted([f for f in inputs - outputs if project.filter_in(f)])
   count = len(fuzzed)
 
   root = project.buildPath
@@ -451,6 +452,54 @@ def parse_test(project, path):
         for f in sorted(expected):
           if f not in actual:
             print '  -', f
+
+def race_test(project):
+    """Test for race conditions."""
+
+    inputs, outputs, built_by, graph = parse_graph(project.tmpPath)
+    t0 = read_mtimes(outputs)
+
+    fuzzed = sorted(outputs & inputs)
+
+    project.clean()
+    project.build()
+    
+    for input in fuzzed:
+        deps = graph.find_deps(input)
+        if len(deps) == 1 and input in deps:
+            continue
+
+        # Touch the file, run the incremental build and read timestamps.
+        with project.touch(input):
+            project.build()
+            t1 = read_mtimes(outputs)
+
+        # Find the set of changed files.
+        modified = set()
+        for k, v in t0.iteritems():
+            if v != t1[k] and project.is_output(k):
+                modified.add(k)
+        
+        # Find expected changes.
+        deps = graph.find_deps(input)
+        expected = {f for f in deps & outputs if project.is_output(f)}
+
+        if modified != expected:
+            missing = expected - modified
+
+            # Report differences.
+            diff = {f for f in missing if graph.is_direct(input, f)}
+            if diff:
+                print '%s: %s' % (input, ' '.join(diff))
+           
+            # Rebuild if targets stale.
+            if missing:
+                project.clean()
+                project.build()
+                t1 = read_mtimes(outputs)
+
+        t0 = t1
+
 
 def get_project(root, args):
     """Identifies the type of the project."""
@@ -494,7 +543,7 @@ def main():
         'cmd',
         metavar='COMMAND',
         type=str,
-        help='Command (query/fuzz/list)'
+        help='Command (build/fuzz/query/list/parse/race)'
     )
     parser.add_argument(
         'files',
@@ -525,6 +574,9 @@ def main():
         return
     if args.cmd == 'parse':
         parse_test(project, args.files[0])
+        return
+    if args.cmd == 'race':
+        race_test(project)
         return
 
     raise RuntimeError('Unknown command: ' + args.cmd)

@@ -38,6 +38,9 @@ class DependencyGraph(object):
         traverse(src)
         return deps
 
+    def is_direct(self, src, dst):
+        return dst in self.nodes[src].edges
+
     def prune_transitive(self, nodes):
         non_transitive = nodes
         for node in nodes:
@@ -48,58 +51,6 @@ class DependencyGraph(object):
 
 
 def parse_graph(path):
-    """Constructs the dependency graph based on files."""
-
-    # Find all files.
-    with open(path, 'r') as f:
-        data = json.loads(f.read())
-
-    files = {}
-    for file in data["files"]:
-        files[file['id']] = file
-
-    graph = DependencyGraph()
-
-    for uid, file in files.iteritems():
-        for dep in file.get('deps', []):
-            graph.add_dependency(files[dep]['name'], files[uid]['name'])
-
-    gid = {}
-    for proc in sorted(data["procs"], key=lambda p: p["uid"]):
-      uid = proc["uid"]
-      if proc.get('cow', False):
-        gid[uid] = gid[proc["parent"]]
-      else:
-        gid[uid] = uid
-
-    groups = defaultdict(lambda: (set(), set()))
-    for proc in data["procs"]:
-      group_id = gid[proc["uid"]]
-
-      ins, outs = groups[group_id]
-      ins.update(proc.get('input', []))
-      outs.update(proc.get('output', []))
-
-    for _, (ins, outs) in groups.iteritems():
-        for input in ins:
-            if files[input]['name'] in ['/dev/stderr', '/dev/stdout']:
-              continue
-            if os.path.isdir(files[input]['name']):
-              continue
-
-            for output in outs:
-                if os.path.isdir(files[output]['name']):
-                  continue
-
-                graph.add_dependency(
-                    files[input]['name'],
-                    files[output]['name']
-                )
-
-    return graph
-
-
-def parse_files(path):
     """Finds files written and read during a clean build."""
 
     # Find all files and processes.
@@ -134,4 +85,57 @@ def parse_files(path):
     inputs = {files[uid]['name'] for uid in inputs if persisted(uid)}
     outputs = {files[uid]['name'] for uid in outputs if persisted(uid)}
 
-    return inputs, outputs, built_by
+    gid = {}
+    for proc in sorted(data["procs"], key=lambda p: p["uid"]):
+      uid = proc["uid"]
+      if proc.get('cow', False):
+        gid[uid] = gid[proc["parent"]]
+      else:
+        gid[uid] = uid
+
+    groups = defaultdict(lambda: (set(), set()))
+    for proc in data["procs"]:
+      group_id = gid[proc["uid"]]
+
+      ins, outs = groups[group_id]
+      ins.update(proc.get('input', []))
+      outs.update(proc.get('output', []))
+   
+    edges = defaultdict(list)
+    for uid, file in files.iteritems():
+        for dep in file.get('deps', []):
+            edges[files[dep]['name']].append(files[uid]['name'])
+   
+    for _, (ins, outs) in groups.iteritems():
+        for input in ins:
+            if files[input]['name'] in ['/dev/stderr', '/dev/stdout']:
+                continue
+            if os.path.isdir(files[input]['name']):
+                continue
+
+            for output in outs:
+                if files[output]['name'] in ['/dev/stderr', '/dev/stdout']:
+                    continue
+                if os.path.isdir(files[output]['name']):
+                    continue
+
+                edges[files[input]['name']].append(files[output]['name'])
+
+    nodes = inputs | outputs
+
+    graph = DependencyGraph()
+    for node in nodes:
+        visited = set()
+        def add_edges(src, to):
+            if to in visited:
+                return
+            visited.add(to)
+
+            for node in edges.get(to, []):
+                if node in nodes:
+                    graph.add_dependency(src, node)
+                else:
+                    add_edges(src, node)
+        add_edges(node, node)
+
+    return inputs, outputs, built_by, graph
