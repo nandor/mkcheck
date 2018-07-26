@@ -21,21 +21,21 @@ $(OUT)/a.h : a.in
 	head -n 4 a.in > $(OUT)/a.h
 	tail -n 7 a.in > $(OUT)/a.cpp
 
-$(OUT)/a.o : $(OUT)/a.h
+$(OUT)/a.o : $(OUT)/a.h $(OUT)/a.cpp
 	$(CC) -c -o $(OUT)/a.o $(OUT)/a.cpp
 
 $(OUT)/b.h : b.in
 	head -n 4 b.in > $(OUT)/b.h
 	tail -n 7 b.in > $(OUT)/b.cpp
 
-$(OUT)/b.o : $(OUT)/b.h
+$(OUT)/b.o : $(OUT)/b.h $(OUT)/b.cpp
 	$(CC) -c -o $(OUT)/b.o $(OUT)/b.cpp
 
 $(OUT)/c.h : c.in
 	head -n 4 c.in > $(OUT)/c.h
 	tail -n 11 c.in > $(OUT)/c.cpp
 
-$(OUT)/c.o : $(OUT)/c.h
+$(OUT)/c.o : $(OUT)/c.h $(OUT)/c.cpp a.in b.in 
 	$(CC) -c -o $(OUT)/c.o $(OUT)/c.cpp
 
 

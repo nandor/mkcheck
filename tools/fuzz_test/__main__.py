@@ -457,12 +457,13 @@ def race_test(project):
     """Test for race conditions."""
 
     inputs, outputs, built_by, graph = parse_graph(project.tmpPath)
-    t0 = read_mtimes(outputs)
 
     fuzzed = sorted(outputs & inputs)
 
     project.clean()
     project.build()
+    
+    t0 = read_mtimes(outputs)
     
     for input in fuzzed:
         deps = graph.find_deps(input)
@@ -483,7 +484,7 @@ def race_test(project):
         # Find expected changes.
         deps = graph.find_deps(input)
         expected = {f for f in deps & outputs if project.is_output(f)}
-
+        
         if modified != expected:
             missing = expected - modified
 

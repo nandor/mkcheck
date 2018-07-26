@@ -133,7 +133,8 @@ def parse_graph(path):
 
             for node in edges.get(to, []):
                 if node in nodes:
-                    graph.add_dependency(src, node)
+                    if src != node:
+                        graph.add_dependency(src, node)
                 else:
                     add_edges(src, node)
         add_edges(node, node)
