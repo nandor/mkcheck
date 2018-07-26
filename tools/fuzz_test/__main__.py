@@ -24,6 +24,12 @@ TOOL_PATH = os.path.join(PROJECT_PATH, 'build', 'mkcheck')
 
 class Project(object):
     """Generic project: automake, cmake, make etc."""
+    
+    FILTER_EXT = []
+    FILTER_FILE = []
+    FILTER_TMP_EXT = []
+    FILTER_TMP_FILE = []
+    FILTER_OUTPUT_EXT = []
 
     def filter_in(self, f):
         """Decides if the file is relevant to the project."""
@@ -38,22 +44,48 @@ class Project(object):
         if os.path.basename(f).startswith('.'):
           return False
 
+        for ending in self.FILTER_EXT:
+            if f.endswith(ending):
+                return False
+
+        name = os.path.basename(f)
+        if name in self.FILTER_FILE:
+            return False
+
         return True
 
     def filter_tmp(self, f):
+        """Filters out uninteresting temporaries."""
+
+        for ending in self.FILTER_TMP_EXT:
+            if f.endswith(ending):
+                return False
+
+        name = os.path.basename(f)
+        if name in self.FILTER_TMP_FILE:
+            return False
+
         return True
 
     def is_output(self, f):
-      """Decides if a file should be considered an output."""
+        """Decides if a file should be considered an output."""
 
-      for ending in ['.pyc', '.pyo']:
-          if f.endswith(ending):
-              return False
-      
-      if os.path.basename(f).startswith('.'):
-        return False
+        for ending in ['.pyc', '.pyo']:
+            if f.endswith(ending):
+                return False
 
-      return True
+        if os.path.basename(f).startswith('.'):
+            return False
+        
+        for ending in self.FILTER_OUTPUT_EXT:
+            if f.endswith(ending):
+                return False
+
+        name = os.path.basename(f)
+        if name in self.FILTER_FILE:
+            return False
+
+        return True
 
     def touch(self, path):
         """Adjusts the content hash/timestamp of a file."""
@@ -84,6 +116,7 @@ class Make(Project):
           code = subprocess.Popen(
             ['make', '--dry-run', 'clean'],
             stdout=devnull,
+            stderr=devnull,
             cwd=root
           ).wait()
         self.has_clean = code == 0
@@ -112,16 +145,14 @@ class Make(Project):
         """Performs an incremental build."""
 
         run_proc([ "make", "MALLOC=libc"], cwd=self.buildPath)
-    
+   
+    FILTER_FILE = ['Makefile']
+
     def filter_in(self, f):
         """Decides if the file is relevant to the project."""
 
         if not super(Make, self).filter_in(f):
             return False
-
-        for ending in ['Makefile']:
-            if f.endswith(ending):
-                return False
 
         if 'linux' in self.buildPath:
             if 'Documentation' in f or 'Kconfig' in f:
@@ -162,27 +193,22 @@ class SCons(Project):
         """Performs an incremental build."""
 
         run_proc([ "scons", "-Q" ], cwd=self.buildPath)
+
+    FILTER_EXT = ['.c', '.h', '.cc', '.cpp', '.hpp', '.i', '.ipp', '.o']
+    FILTER_FILE = ['SConscript', 'SConstruct']
+    FILTER_TMP_EXT = ['.o', '.dblite', '.a']
+    FILTER_TMP_FILE = []
+    FILTER_OUTPUT_EXT = ['.internal', '.includecache']
     
     def filter_in(self, f):
         """Decides if the file is relevant to the project."""
 
         if not super(SCons, self).filter_in(f):
             return False
-        
         if not f.startswith(self.projectPath):
             return False
-        
         if 'scons' in f or '.sconf_temp' in f:
             return False
-        
-        for ending in ['.c', '.h', '.cc', '.cpp', '.hpp', '.i', '.ipp', '.o']:
-            if f.endswith(ending):
-                return False
-
-        name = os.path.basename(f)
-        if name in ['SConscript', 'SConstruct']: 
-            return False
-
         return True
     
     def touch(self, path):
@@ -259,6 +285,13 @@ class CMakeProject(Project):
        '.ninja_deps', '.ninja_log'
     ]
 
+    FILTER_TMP_EXT = [
+        '.output', '.includecache', '.internal', '.make', '.a', '.o', '.so'
+    ]
+
+    FILTER_TMP_FILE = []
+    FILTER_OUTPUT_EXT = ['.internal', '.includecache']
+
     def filter_in(self, f):
         """Decides if the file is relevant to the project."""
         
@@ -266,32 +299,18 @@ class CMakeProject(Project):
             return False
         if self.buildPath != self.projectPath and f.startswith(self.buildPath):
             return False
-        
         if not f.startswith(self.projectPath):
             return False
-        for ending in self.FILTER_EXT:
-            if f.endswith(ending):
-                return False
+        return True
+    
+    def filter_tmp(self, f):
+        """Decides if an internal file is relevant for race detection."""
 
-        name = os.path.basename(f)
-        if name in self.FILTER_FILE:
+        if not super(CMakeProject, self).filter_tmp(f):
+            return False 
+        if not f.startswith(self.projectPath):
             return False
         return True
-
-    def is_output(self, f):
-        if not super(CMakeProject, self).is_output(f):
-            return False
-
-        for ending in ['.internal', '.includecache']:
-            if f.endswith(ending):
-                return False
-
-        name = os.path.basename(f)
-        if name in self.FILTER_FILE:
-            return False
-
-        return True
-
 
 
 class CMakeMake(CMakeProject):
@@ -457,15 +476,14 @@ def race_test(project):
     """Test for race conditions."""
 
     inputs, outputs, built_by, graph = parse_graph(project.tmpPath)
-
-    fuzzed = sorted(outputs & inputs)
-
+    fuzzed = {f for f in outputs & inputs if project.filter_tmp(f)}
+    
     project.clean()
     project.build()
     
     t0 = read_mtimes(outputs)
-    
-    for input in fuzzed:
+
+    for input in sorted(fuzzed):
         deps = graph.find_deps(input)
         if len(deps) == 1 and input in deps:
             continue
