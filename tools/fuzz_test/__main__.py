@@ -276,7 +276,7 @@ class CMakeProject(Project):
       '.cpp', '.cmake', '.cmake.in', '.c', '.cc', '.C',
       '.make', '.marks', '.includecache', '.check_cache',
       # Only for very large projects.
-      '.h', '.hpp', '.inl'
+      #'.h', '.hpp', '.inl'
     ]
 
     FILTER_FILE = [
@@ -523,20 +523,21 @@ def race_test(project):
 def get_project(root, args):
     """Identifies the type of the project."""
      
-    # Out-of-source CMake build.
+    # CMake builds.
     if os.path.isfile(os.path.join(root, 'CMakeCache.txt')):
         projectDir = os.path.normpath(os.path.join(root, os.pardir))
-        if os.path.isfile(os.path.join(root, 'Makefile')):
-            return CMakeMake(projectDir, root, args.tmp_path)
-        if os.path.isfile(os.path.join(root, 'build.ninja')):
-            return CMakeNinja(projectDir, root, args.tmp_path)
-
-    # In-source CMake build.
-    if os.path.isfile(os.path.join(root, 'CMakeCache.txt')):
-        if os.path.isfile(os.path.join(root, 'Makefile')):
-            return CMakeMake(root, root, args.tmp_path)
-        if os.path.isfile(os.path.join(root, 'build.ninja')):
-            return CMakeNinja(root, root, args.tmp_path)
+        if os.path.isfile(os.path.join(projectDir, 'CMakeLists.txt')):
+            # Out of source.
+            if os.path.isfile(os.path.join(root, 'Makefile')):
+                return CMakeMake(projectDir, root, args.tmp_path)
+            if os.path.isfile(os.path.join(root, 'build.ninja')):
+                return CMakeNinja(projectDir, root, args.tmp_path)
+        else:
+            # In-source.
+            if os.path.isfile(os.path.join(root, 'Makefile')):
+                return CMakeMake(root, root, args.tmp_path)
+            if os.path.isfile(os.path.join(root, 'build.ninja')):
+                return CMakeNinja(root, root, args.tmp_path)
     
     # Manual GNU Make build.
     if os.path.isfile(os.path.join(root, 'Makefile')):
