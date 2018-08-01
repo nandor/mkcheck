@@ -92,9 +92,9 @@ class Project(object):
         
         class TouchContext(object):
             def __init__(self):
-                time.sleep(0.01)
+                time.sleep(1)
                 os.utime(path, None)
-                time.sleep(0.01)
+                time.sleep(1)
             
             def __enter__(self): 
                 pass
@@ -219,16 +219,18 @@ class SCons(Project):
                 self.tmp = tempfile.TemporaryFile()
             
             def __enter__(self):
+                time.sleep(1)
                 with open(path, 'rb') as f:
                     self.tmp.write(f.read())
 
                 with open(path, 'ab') as f:
                     is_text = False
-                    for ext in ['.conf', '.l', 'VERSION', 'imgdesc']:
+                    for ext in ['.conf', '.l', 'VERSION', 'imgdesc', '.py', '.txt']:
                         if path.endswith(ext):
                             is_text = True
                             break
                     f.write('\n' if is_text else '\0')
+                time.sleep(1)
             
             def __exit__(self, type, value, tb):
                 self.tmp.seek(0)
