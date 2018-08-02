@@ -21,4 +21,4 @@ def run_proc(*args, **kwargs):
         print stdout
         print stderr
         sys.stdout.flush()
-        raise Exception('Command failed: ' + str(proc.returncode))
+        raise Exception('Command "%s" failed: %d' % (' '.join(args[0]), proc.returncode))

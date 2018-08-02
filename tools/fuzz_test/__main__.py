@@ -211,35 +211,6 @@ class SCons(Project):
             return False
         return True
     
-    def touch(self, path):
-        """Adjusts the content hash/timestamp of a file."""
-        
-        class TouchContext(object):
-            def __init__(self):
-                self.tmp = tempfile.TemporaryFile()
-            
-            def __enter__(self):
-                time.sleep(1)
-                with open(path, 'rb') as f:
-                    self.tmp.write(f.read())
-
-                with open(path, 'ab') as f:
-                    is_text = False
-                    for ext in ['.conf', '.l', 'VERSION', 'imgdesc', '.py', '.txt']:
-                        if path.endswith(ext):
-                            is_text = True
-                            break
-                    f.write('\n' if is_text else '\0')
-                time.sleep(1)
-            
-            def __exit__(self, type, value, tb):
-                self.tmp.seek(0)
-                with open(path, 'wb') as f:
-                    f.write(self.tmp.read())
-                self.tmp.close()
-
-        return TouchContext()
-
 
 class CMakeProject(Project):
     """Project relying on CMake."""
