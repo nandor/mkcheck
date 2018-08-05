@@ -139,7 +139,8 @@ class Make(Project):
         if self.has_clean:
           run_proc([ "make", "clean" ], cwd=self.buildPath)
         else:
-          run_proc([ "git", "clean", "-f" ], cwd=self.buildPath)
+          run_proc([ "git", "clean", "-fd" ], cwd=self.buildPath)
+          run_proc([ "git", "clean", "-fdX" ], cwd=self.buildPath)
 
     def build(self):
         """Performs an incremental build."""
@@ -194,7 +195,7 @@ class SCons(Project):
 
         run_proc([ "scons", "-Q" ], cwd=self.buildPath)
 
-    FILTER_EXT = ['.c', '.h', '.cc', '.cpp', '.hpp', '.i', '.ipp', '.o']
+    FILTER_EXT = ['.c', '.cc', '.cpp', '.hpp', '.i', '.ipp', '.o', '.h']
     FILTER_FILE = ['SConscript', 'SConstruct']
     FILTER_TMP_EXT = ['.o', '.dblite', '.a']
     FILTER_TMP_FILE = []
@@ -249,7 +250,7 @@ class CMakeProject(Project):
       '.cpp', '.cmake', '.cmake.in', '.c', '.cc', '.C',
       '.make', '.marks', '.includecache', '.check_cache',
       # Only for very large projects.
-      #'.h', '.hpp', '.inl'
+      '.h', '.hpp', '.inl', '.ic'
     ]
 
     FILTER_FILE = [
@@ -263,7 +264,7 @@ class CMakeProject(Project):
     ]
 
     FILTER_TMP_FILE = []
-    FILTER_OUTPUT_EXT = ['.internal', '.includecache']
+    FILTER_OUTPUT_EXT = ['.internal', '.includecache', '.make']
 
     def filter_in(self, f):
         """Decides if the file is relevant to the project."""
@@ -351,7 +352,7 @@ def fuzz_test(project, files):
             over = False
             under = False
 
-            redundant = modified - expected
+            redundant = graph.prune_transitive(modified - expected)
             for f in sorted(redundant):
                 over = True
                 print '  + {} ({})'.format(f, built_by[f])

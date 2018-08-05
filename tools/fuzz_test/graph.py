@@ -88,7 +88,7 @@ def parse_graph(path):
     gid = {}
     for proc in sorted(data["procs"], key=lambda p: p["uid"]):
       uid = proc["uid"]
-      if proc.get('cow', False):
+      if proc.get('cow', False) and proc["parent"] in gid:
         gid[uid] = gid[proc["parent"]]
       else:
         gid[uid] = uid
@@ -130,7 +130,6 @@ def parse_graph(path):
             if to in visited:
                 return
             visited.add(to)
-
             for node in edges.get(to, []):
                 if node in nodes:
                     if src != node:
