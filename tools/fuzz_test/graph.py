@@ -18,13 +18,17 @@ class DependencyGraph(object):
 
     def __init__(self):
         self.nodes = {}
+        self.rev_nodes = {}
 
     def add_dependency(self, src, dst):
         if src not in self.nodes:
             self.nodes[src] = self.Node(src)
+            self.rev_nodes[src] = self.Node(src)
         if dst not in self.nodes:
             self.nodes[dst] = self.Node(dst)
+            self.rev_nodes[dst] = self.Node(dst)
         self.nodes[src].edges.add(dst)
+        self.rev_nodes[dst].edges.add(src)
 
     def find_deps(self, src):
         deps = set()
@@ -48,6 +52,25 @@ class DependencyGraph(object):
                 continue
             non_transitive = non_transitive - (self.find_deps(node) - {node})
         return non_transitive
+
+    def topo_order(self):
+        """Finds the first and last position a node can be scheduled to."""
+
+        topo = []
+        visited = set()
+        def topo_dfs(node):
+            if node in visited:
+                return
+            visited.add(node)
+
+            for next in self.nodes[node].edges:
+                topo_dfs(next)
+            topo.append(node)
+
+        for node in self.nodes.keys():
+            topo_dfs(node)
+    
+        return reversed(topo)
 
 
 def parse_graph(path):
@@ -107,26 +130,24 @@ def parse_graph(path):
             edges[files[dep]['name']].append(files[uid]['name'])
    
     for _, (ins, outs) in groups.iteritems():
-        for input in ins:
+        for input in ins - outs:
             if files[input]['name'] in ['/dev/stderr', '/dev/stdout']:
                 continue
             if os.path.isdir(files[input]['name']):
                 continue
-
             for output in outs:
                 if files[output]['name'] in ['/dev/stderr', '/dev/stdout']:
                     continue
                 if os.path.isdir(files[output]['name']):
                     continue
-
                 edges[files[input]['name']].append(files[output]['name'])
 
     nodes = inputs | outputs
 
     graph = DependencyGraph()
-    for node in nodes:
+    for src in nodes:
         visited = set()
-        def add_edges(src, to):
+        def add_edges(to):
             if to in visited:
                 return
             visited.add(to)
@@ -135,7 +156,7 @@ def parse_graph(path):
                     if src != node:
                         graph.add_dependency(src, node)
                 else:
-                    add_edges(src, node)
-        add_edges(node, node)
+                    add_edges(node)
+        add_edges(src)
 
     return inputs, outputs, built_by, graph

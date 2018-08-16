@@ -20,11 +20,67 @@ SCRIPT_PATH = os.path.dirname(os.path.abspath(__file__))
 PROJECT_PATH = os.path.abspath(os.path.join(SCRIPT_PATH, os.pardir, os.pardir))
 TOOL_PATH = os.path.join(PROJECT_PATH, 'build', 'mkcheck')
 
+DELAY=1
+
+
+
+class HashTouchContext(object):
+    """Context touching a file by adding a dummy extension."""
+
+    TEXT_EXT = [
+        '.asm', '.asm-generic', '.awk', '.S', '.bc', '.ld',
+        '.conf', '.l', 'VERSION', 'imgdesc', '.py', '.txt',
+        '.config', '.s', '.h'
+    ]
+
+    def __init__(self, path):
+        self.path = path
+        self.tmp = tempfile.TemporaryFile()
+    
+    def __enter__(self):
+        time.sleep(DELAY)
+        with open(self.path, 'rb') as f:
+            data = f.read()
+            is_text = data[0] == '#'
+            self.tmp.write(data)
+
+        with open(self.path, 'ab') as f:
+            if not is_text:
+                for ext in self.TEXT_EXT:
+                    if self.path.endswith(ext):
+                        is_text = True
+                        break
+            f.write('\n' if is_text else '\0')
+        time.sleep(DELAY)
+    
+    def __exit__(self, type, value, tb):
+        self.tmp.seek(0)
+        with open(self.path, 'wb') as f:
+            f.write(self.tmp.read())
+        self.tmp.close()
+
+
+class TimeTouchContext(object):
+    def __init__(self, path):
+        self.path = path
+
+        time.sleep(DELAY)
+        os.utime(path, None)
+        time.sleep(DELAY)
+    
+    def __enter__(self): 
+        pass
+    
+    def __exit__(self, type, value, tb): 
+        pass
 
 
 class Project(object):
     """Generic project: automake, cmake, make etc."""
     
+    # Based on past information, quite a few files are very 
+    # likely to be correct, thus they are excluded from
+    # fuzzing in order to save on execution time.
     FILTER_EXT = []
     FILTER_FILE = []
     FILTER_TMP_EXT = []
@@ -65,7 +121,7 @@ class Project(object):
         if name in self.FILTER_TMP_FILE:
             return False
 
-        return True
+        return 'Swig' not in f and 'swig' not in f and not f.endswith('.config')
 
     def is_output(self, f):
         """Decides if a file should be considered an output."""
@@ -89,20 +145,10 @@ class Project(object):
 
     def touch(self, path):
         """Adjusts the content hash/timestamp of a file."""
-        
-        class TouchContext(object):
-            def __init__(self):
-                time.sleep(1)
-                os.utime(path, None)
-                time.sleep(1)
-            
-            def __enter__(self): 
-                pass
-            
-            def __exit__(self, type, value, tb): 
-                pass
-
-        return TouchContext()
+        if 'linux' in path:
+            return HashTouchContext(path)
+        else:
+            return TimeTouchContext(path)
 
 
 class Make(Project):
@@ -146,8 +192,6 @@ class Make(Project):
         """Performs an incremental build."""
 
         run_proc([ "make", "MALLOC=libc"], cwd=self.buildPath)
-   
-    FILTER_FILE = ['Makefile']
 
     def filter_in(self, f):
         """Decides if the file is relevant to the project."""
@@ -156,14 +200,32 @@ class Make(Project):
             return False
 
         if 'linux' in self.buildPath:
-            if 'Documentation' in f or 'Kconfig' in f:
+            if 'Documentation' in f or 'Kconfig' in f or 'kconfig' in f:
                 return False
 
-            for ending in ['.c', '.h', '.order', 'README', 'Kbuild', 'TODO']:
+            for ending in ['.c', '.h', '.order', 'README', 'Kbuild', 'TODO', '.include']:
                 if f.endswith(ending):
                     return False 
 
+        return 'Makefile' not in f
+
+    def filter_tmp(self, tmp):
+        """Filters temporary objects for race testing."""
+
+        if not super(Make, self).filter_tmp(tmp):
+            return False
+
+        if 'linux' in self.buildPath:
+            for ending in ['.o']:
+                if tmp.endswith(ending):
+                    return False
+
         return True
+
+    def in_project(self, f):
+        """Checks if a file is in the project."""
+
+        return f.startswith(self.projectPath)
 
 
 class SCons(Project):
@@ -212,6 +274,16 @@ class SCons(Project):
             return False
         return True
     
+    def in_project(self, f):
+        """Checks if a file is in the project."""
+
+        return f.startswith(self.projectPath)
+    
+    def touch(self, path):
+        """Adjusts the content hash/timestamp of a file."""
+        
+        return HashTouchContext(path)
+  
 
 class CMakeProject(Project):
     """Project relying on CMake."""
@@ -285,6 +357,11 @@ class CMakeProject(Project):
         if not f.startswith(self.projectPath):
             return False
         return True
+    
+    def in_project(self, f):
+        """Checks if a file is in the project."""
+
+        return f.startswith(self.projectPath) or f.startswith(self.buildPath)
 
 
 class CMakeMake(CMakeProject):
@@ -336,7 +413,7 @@ def fuzz_test(project, files):
         with project.touch(input):
             project.build()
             t1 = read_mtimes(outputs)
-
+        
         # Find the set of changed files.
         modified = set()
         for k, v in t0.iteritems():
@@ -448,15 +525,21 @@ def parse_test(project, path):
 
 def race_test(project):
     """Test for race conditions."""
-
+    
     inputs, outputs, built_by, graph = parse_graph(project.tmpPath)
     fuzzed = {f for f in outputs & inputs if project.filter_tmp(f)}
+    
+    # Create a copy of the graph from which missing edges will be removed.
+    build_graph = defaultdict(set)
+    for f, node in graph.nodes.iteritems():
+        for next in node.edges:
+            build_graph[next].add(f)
     
     project.clean()
     project.build()
     
     t0 = read_mtimes(outputs)
-
+    missing_edges = []
     for input in sorted(fuzzed):
         deps = graph.find_deps(input)
         if len(deps) == 1 and input in deps:
@@ -466,7 +549,7 @@ def race_test(project):
         with project.touch(input):
             project.build()
             t1 = read_mtimes(outputs)
-
+        
         # Find the set of changed files.
         modified = set()
         for k, v in t0.iteritems():
@@ -481,9 +564,11 @@ def race_test(project):
             missing = expected - modified
 
             # Report differences.
-            diff = {f for f in missing if graph.is_direct(input, f)}
-            if diff:
-                print '%s: %s' % (input, ' '.join(diff))
+            for f in {f for f in missing if graph.is_direct(input, f)}:
+                print '\t', f
+                if project.filter_tmp(f):
+                    missing_edges.append((input, f))
+                    build_graph[f].remove(input)
            
             # Rebuild if targets stale.
             if missing:
@@ -492,6 +577,32 @@ def race_test(project):
                 t1 = read_mtimes(outputs)
 
         t0 = t1
+    
+    # Find the best and worst time a node can be scheduled in the build graph.
+    graphs = {}
+    build_graphs = {}
+    race_files = set()
+    for node in graph.topo_order():
+        self = {node} if node in outputs else set()
+        
+        graphs[node] = self.union(
+            *[graphs[p] for p in graph.rev_nodes[node].edges]
+        )
+        build_graphs[node] = self.union(
+            *[build_graphs[p] for p in build_graph[node]]
+        )
+            
+        if graphs[node] > build_graphs[node]:
+            race_files.add(node)
+    
+    print 'Races:'
+    for f in graph.prune_transitive(race_files):
+        print f, built_by[f]
+
+    print 'Missing edges:'
+    for src, dst in missing_edges:
+        print src, ' -> ', dst
+
 
 
 def get_project(root, args):

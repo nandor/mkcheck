@@ -35,7 +35,7 @@ $(OUT)/c.h : c.in
 	head -n 4 c.in > $(OUT)/c.h
 	tail -n 11 c.in > $(OUT)/c.cpp
 
-$(OUT)/c.o : $(OUT)/c.h $(OUT)/c.cpp a.in b.in 
+$(OUT)/c.o : $(OUT)/c.h $(OUT)/c.cpp
 	$(CC) -c -o $(OUT)/c.o $(OUT)/c.cpp
 
 
