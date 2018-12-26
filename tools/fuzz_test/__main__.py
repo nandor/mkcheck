@@ -688,6 +688,10 @@ def main():
 
 
 if __name__ == '__main__':
-    resource.setrlimit(resource.RLIMIT_STACK, (2 ** 29, -1))
-    sys.setrecursionlimit(10 ** 6)
+    try:
+        # Graphs traversals use dfs - raise stack limit here.
+        resource.setrlimit(resource.RLIMIT_STACK, (2 ** 29, -1))
+        sys.setrecursionlimit(10 ** 6)
+    except:
+        print('WARNING: cannot set rlimit')
     main()
