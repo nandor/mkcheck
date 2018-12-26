@@ -565,7 +565,6 @@ def race_test(project):
 
             # Report differences.
             for f in {f for f in missing if graph.is_direct(input, f)}:
-                print '\t', f
                 if project.filter_tmp(f):
                     missing_edges.append((input, f))
                     build_graph[f].remove(input)

@@ -35,5 +35,11 @@ $(OUT)/main.o : main.c
 $(OUT)/main : $(OUT)/main.o $(OUT)/a.o $(OUT)/b.o $(OUT)/c.o $(OUT)/lib_a.o $(OUT)/lib_b.o
 	$(CC) -o $(OUT)/main $(OUT)/main.o $(OUT)/a.o $(OUT)/b.o $(OUT)/c.o $(OUT)/lib_a.o $(OUT)/lib_b.o
 
-clean:
+clean :
 	rm -rf $(OUT)
+
+test :
+	make clean
+	../../build/mkcheck -o /tmp/graph -- make -j1
+	@echo "Fuzzing parallel"
+	python ../../tools/fuzz_test --tmp-path=/tmp/graph fuzz

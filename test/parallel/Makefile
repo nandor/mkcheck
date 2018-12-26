@@ -45,6 +45,14 @@ $(OUT)/main.o : main.cpp $(OUT)/a.h $(OUT)/b.h $(OUT)/c.h
 $(OUT)/main : $(OUT)/a.o $(OUT)/b.o $(OUT)/c.o $(OUT)/main.o
 	$(CC) -o $(OUT)/main $^
 
-clean:
+clean :
 	rm -rf $(OUT)
 
+test :
+	make clean
+	../../build/mkcheck -o /tmp/graph -- make -j1
+	@echo "Fuzzing parallel"
+	python ../../tools/fuzz_test --tmp-path=/tmp/graph fuzz	
+	@echo "Race testing parallel"
+	python ../../tools/fuzz_test --tmp-path=/tmp/graph race
+    
