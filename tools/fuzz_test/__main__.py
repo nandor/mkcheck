@@ -428,6 +428,14 @@ def build_tool():
     raise RuntimeError('Cannot rebuild mkcheck')
 
 
+def reset_project(outputs):
+    """Set the timestamp of all files in a project to be the same."""
+    
+    stamp = time.time()
+    for f in outputs:
+        if os.path.exists(f):
+            os.utime(f, (stamp, stamp))
+
 def fuzz_test(project, files):
     """Find the set of inputs and outputs, as well as the graph."""
 
@@ -457,9 +465,7 @@ def fuzz_test(project, files):
                 modified.add(k)
         
         # Reset the project.
-        for f in outputs:
-            if os.path.exists(f):
-                os.utime(f, None)
+        reset_project(outputs)
 
         # Find expected changes.
         deps = graph.find_deps(input)
@@ -586,9 +592,7 @@ def race_test(project):
                 modified.add(k)
         
         # Reset the project.
-        for f in outputs:
-            if os.path.exists(f):
-                os.utime(f, None)
+        reset_project(outputs)
         
         # Find expected changes.
         deps = graph.find_deps(input)
