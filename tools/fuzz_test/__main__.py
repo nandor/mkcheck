@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import argparse
 import os
+import yaml
+import re
 import resource
 import subprocess
 import stat
@@ -41,7 +45,7 @@ class HashTouchContext(object):
         time.sleep(DELAY)
         with open(self.path, 'rb') as f:
             data = f.read()
-            is_text = data[0] == '#'
+            is_text = data and data[0] == '#'
             self.tmp.write(data)
 
         with open(self.path, 'ab') as f:
@@ -63,16 +67,15 @@ class HashTouchContext(object):
 class TimeTouchContext(object):
     def __init__(self, path):
         self.path = path
-
-        time.sleep(DELAY)
-        os.utime(path, None)
-        time.sleep(DELAY)
     
     def __enter__(self): 
-        pass
+        time.sleep(DELAY)
+        if os.path.exists(self.path): os.utime(self.path, None)
+        time.sleep(DELAY)
     
     def __exit__(self, type, value, tb): 
         pass
+
 
 
 class Project(object):
@@ -81,11 +84,28 @@ class Project(object):
     # Based on past information, quite a few files are very 
     # likely to be correct, thus they are excluded from
     # fuzzing in order to save on execution time.
-    FILTER_EXT = []
-    FILTER_FILE = []
-    FILTER_TMP_EXT = []
-    FILTER_TMP_FILE = []
-    FILTER_OUTPUT_EXT = []
+    FILTER_IN  = []
+    FILTER_TMP = []
+    FILTER_OUT = []
+    
+    def __init__(self, rule_file, use_hash, args):
+        self._use_hash = use_hash
+        self._args = args
+
+        if rule_file:
+            with open(rule_file, 'r') as f:
+                data = yaml.load(f.read())
+            filter_in = data.get('filter_in', [])
+            filter_tmp = data.get('filter_tmp', [])
+            filter_out = data.get('filter_out', [])
+        else:
+            filter_in = self.FILTER_IN
+            filter_tmp = self.FILTER_TMP
+            filter_out = self.FILTER_OUT
+
+        self._filter_in = [re.compile('^' + f + '$') for f in filter_in]
+        self._filter_tmp = [re.compile('^' + f + '$') for f in filter_tmp]
+        self._filter_out = [re.compile('^' + f + '$') for f in filter_out]
 
     def filter_in(self, f):
         """Decides if the file is relevant to the project."""
@@ -94,69 +114,72 @@ class Project(object):
             return False
         if f == TOOL_PATH:
             return False
-        for ending in ['.pyc']:
-            if f.endswith(ending):
-                return False
-        if os.path.basename(f).startswith('.'):
+        name = os.path.basename(f)
+        if name.startswith('.'):
           return False
 
-        for ending in self.FILTER_EXT:
-            if f.endswith(ending):
+        for pattern in self._filter_in:
+            if pattern.match(f):
                 return False
-
-        name = os.path.basename(f)
-        if name in self.FILTER_FILE:
-            return False
 
         return True
 
     def filter_tmp(self, f):
         """Filters out uninteresting temporaries."""
-
-        for ending in self.FILTER_TMP_EXT:
-            if f.endswith(ending):
-                return False
-
-        name = os.path.basename(f)
-        if name in self.FILTER_TMP_FILE:
+        
+        if f == TOOL_PATH:
             return False
 
-        return 'Swig' not in f and 'swig' not in f and not f.endswith('.config')
+        name = os.path.basename(f)
+        if name.startswith('.'):
+            return False
+    
+        for pattern in self._filter_tmp:
+            if pattern.match(f):
+                return False
+
+        return True
 
     def is_output(self, f):
         """Decides if a file should be considered an output."""
 
-        for ending in ['.pyc', '.pyo']:
-            if f.endswith(ending):
-                return False
-
-        if os.path.basename(f).startswith('.'):
+        name = os.path.basename(f)
+        if name.startswith('.'):
             return False
         
-        for ending in self.FILTER_OUTPUT_EXT:
-            if f.endswith(ending):
+        for pattern in self._filter_out:
+            if pattern.match(f):
                 return False
-
-        name = os.path.basename(f)
-        if name in self.FILTER_FILE:
-            return False
-
+        
         return True
 
     def touch(self, path):
         """Adjusts the content hash/timestamp of a file."""
-        if 'linux' in path:
+        if self._use_hash:
             return HashTouchContext(path)
         else:
             return TimeTouchContext(path)
 
 
 class Make(Project):
-
-    def __init__(self, root, tmpPath):
+    
+    FILTER_IN  = [
+        '.*\.pyc',
+        '.*\Makefile',
+        '.*\.d',
+    ]
+    FILTER_TMP = [
+        '.*\.d',
+    ]
+    FILTER_OUT = [
+        '.*\.d',
+    ]
+    
+    def __init__(self, root, graph, rule_file, use_hash, args):
+        super(Make, self).__init__(rule_file, use_hash, args)
         self.projectPath = root
         self.buildPath = root
-        self.tmpPath = tmpPath
+        self.graph = graph
 
         with open(os.devnull, 'w') as devnull:
           code = subprocess.Popen(
@@ -169,13 +192,10 @@ class Make(Project):
 
     def clean_build(self):
         """Performs a clean build of the project."""
-
-        # Clean the project.
-        self.clean()
-
+    
         # Run the build with mkcheck.
         run_proc(
-          [ TOOL_PATH, "--output={0}".format(self.tmpPath), "--", "make" ],
+          [ TOOL_PATH, "--output={0}".format(self.graph), "--", "make" ],
           cwd=self.buildPath
         )
 
@@ -185,42 +205,12 @@ class Make(Project):
         if self.has_clean:
           run_proc([ "make", "clean" ], cwd=self.buildPath)
         else:
-          run_proc([ "git", "clean", "-fd" ], cwd=self.buildPath)
-          run_proc([ "git", "clean", "-fdX" ], cwd=self.buildPath)
+          run_proc([ "git", "clean", "-fdx" ], cwd=self.buildPath)
 
     def build(self):
         """Performs an incremental build."""
 
-        run_proc([ "make", "MALLOC=libc"], cwd=self.buildPath)
-
-    def filter_in(self, f):
-        """Decides if the file is relevant to the project."""
-
-        if not super(Make, self).filter_in(f):
-            return False
-
-        if 'linux' in self.buildPath:
-            if 'Documentation' in f or 'Kconfig' in f or 'kconfig' in f:
-                return False
-
-            for ending in ['.c', '.h', '.order', 'README', 'Kbuild', 'TODO', '.include']:
-                if f.endswith(ending):
-                    return False 
-
-        return 'Makefile' not in f
-
-    def filter_tmp(self, tmp):
-        """Filters temporary objects for race testing."""
-
-        if not super(Make, self).filter_tmp(tmp):
-            return False
-
-        if 'linux' in self.buildPath:
-            for ending in ['.o']:
-                if tmp.endswith(ending):
-                    return False
-
-        return True
+        run_proc([ "make"] + self._args, cwd=self.buildPath)
 
     def in_project(self, f):
         """Checks if a file is in the project."""
@@ -230,20 +220,49 @@ class Make(Project):
 
 class SCons(Project):
 
-    def __init__(self, root, tmpPath):
+    FILTER_IN = [
+        '.*\.c', 
+        '.*\.cc', 
+        '.*\.cpp', 
+        '.*\.h', 
+        '.*\.hpp', 
+        '.*\.i', 
+        '.*\.ipp', 
+        '.*\.o', 
+        '.*\.pyc', 
+        '.*\.sconf_temp',
+        '.*/SConscript', 
+        '.*/SConstruct',
+        '.*scons.*',
+    ]
+    FILTER_TMP = [
+        '.*\.o', 
+        '.*\.dblite', 
+        '.*\.a'
+    ]
+    FILTER_OUT = [
+        '.*\.internal', 
+        '.*\.includecache'
+    ]
+
+    def __init__(self, root, graph, rule_file, use_hash, args):
+        super(SCons, self).__init__(rule_file, use_hash, args)
         self.projectPath = root
         self.buildPath = root
-        self.tmpPath = tmpPath
+        self.graph = graph
 
     def clean_build(self):
         """Performs a clean build of the project."""
+
+        # Build once - needed for some projects.
+        run_proc(['scons'])
 
         # Clean the project.
         self.clean()
 
         # Run the build with mkcheck.
         run_proc(
-          [ TOOL_PATH, "--output={0}".format(self.tmpPath), "--", "scons" ],
+          [ TOOL_PATH, "--output={0}".format(self.graph), "--", "scons" ],
           cwd=self.buildPath
         )
 
@@ -256,12 +275,6 @@ class SCons(Project):
         """Performs an incremental build."""
 
         run_proc([ "scons", "-Q" ], cwd=self.buildPath)
-
-    FILTER_EXT = ['.c', '.cc', '.cpp', '.hpp', '.i', '.ipp', '.o', '.h']
-    FILTER_FILE = ['SConscript', 'SConstruct']
-    FILTER_TMP_EXT = ['.o', '.dblite', '.a']
-    FILTER_TMP_FILE = []
-    FILTER_OUTPUT_EXT = ['.internal', '.includecache']
     
     def filter_in(self, f):
         """Decides if the file is relevant to the project."""
@@ -270,27 +283,68 @@ class SCons(Project):
             return False
         if not f.startswith(self.projectPath):
             return False
-        if 'scons' in f or '.sconf_temp' in f:
-            return False
         return True
     
     def in_project(self, f):
         """Checks if a file is in the project."""
 
         return f.startswith(self.projectPath)
-    
-    def touch(self, path):
-        """Adjusts the content hash/timestamp of a file."""
-        
-        return HashTouchContext(path)
   
 
 class CMakeProject(Project):
     """Project relying on CMake."""
+    
+    FILTER_IN = [
+        '.*\.cpp', 
+        '.*\.cmake', 
+        '.*\.cmake.in', 
+        '.*\.c', 
+        '.*\.h',
+        '.*\.hpp',
+        '.*\.cc', 
+        '.*\.C',
+        '.*\.make', 
+        '.*\.mk',
+        '.*\.marks', 
+        '.*\.includecache', 
+        '.*\.check_cache',
+        '.*\.pyc',
+        '.*/Doxyfile\.in',
+        '.*/CMakeLists.txt', 
+        '.*/flgas.make', 
+        '.*/depend.internal', 
+        '.*/link.txt',
+        '.*/Makefile2', 
+        '.*/Makefile', 
+        '.*/CMakeCache.txt', 
+        '.*/feature_tests.cxx',
+        '.*/.ninja_deps', 
+        '.*/.ninja_log',
+    ]
 
-    def __init__(self, projectPath, buildPath, tmpPath):
+    FILTER_TMP = [
+        '.*\.output', 
+        '.*\.includecache', 
+        '.*\.internal', 
+        '.*\.make', 
+        '.*\.a', 
+        '.*\.o', 
+        '.*\.so',
+    ]
+
+    FILTER_OUT = [
+        '.*\.internal', 
+        '.*\.includecache', 
+        '.*\.make',
+        '.*swig.*',
+        '.*doxygen.*',
+        '.*INFO.*',
+    ]
+
+    def __init__(self, projectPath, buildPath, graph, rule_file, use_hash, args):
+        super(CMakeProject, self).__init__(rule_file, use_hash, args)
         self.projectPath = projectPath
-        self.tmpPath = tmpPath
+        self.graph = graph
         self.buildPath = buildPath
 
         if not os.path.isdir(self.buildPath):
@@ -299,12 +353,15 @@ class CMakeProject(Project):
     def clean_build(self):
         """Performs a clean build of the project."""
 
+        # Build once - needed for some projects.
+        run_proc(self.BUILD, cwd=self.buildPath)
+    
         # Clean the project.
         self.clean()
 
         # Run the build with mkcheck.
         run_proc(
-          [ TOOL_PATH, "--output={0}".format(self.tmpPath), "--" ] + self.BUILD,
+          [ TOOL_PATH, "--output={0}".format(self.graph), "--" ] + self.BUILD,
           cwd=self.buildPath
         )
 
@@ -317,26 +374,6 @@ class CMakeProject(Project):
         """Performs an incremental build."""
 
         run_proc(self.BUILD, cwd=self.buildPath)
-
-    FILTER_EXT = [
-      '.cpp', '.cmake', '.cmake.in', '.c', '.cc', '.C',
-      '.make', '.marks', '.includecache', '.check_cache',
-      # Only for very large projects.
-      '.h', '.hpp', '.inl', '.ic'
-    ]
-
-    FILTER_FILE = [
-       'CMakeLists.txt', 'flgas.make', 'depend.internal', 'link.txt',
-       'Makefile2', 'Makefile', 'CMakeCache.txt', 'feature_tests.cxx',
-       '.ninja_deps', '.ninja_log'
-    ]
-
-    FILTER_TMP_EXT = [
-        '.output', '.includecache', '.internal', '.make', '.a', '.o', '.so'
-    ]
-
-    FILTER_TMP_FILE = []
-    FILTER_OUTPUT_EXT = ['.internal', '.includecache', '.make']
 
     def filter_in(self, f):
         """Decides if the file is relevant to the project."""
@@ -397,64 +434,57 @@ def fuzz_test(project, files):
     project.clean()
     project.build()
 
-    inputs, outputs, built_by, graph = parse_graph(project.tmpPath)
-    t0 = read_mtimes(outputs)
+    inputs, outputs, built_by, graph = parse_graph(project.graph)
 
     if len(files) == 0:
         fuzzed = sorted([f for f in inputs - outputs if project.filter_in(f)])
     else:
         fuzzed = [os.path.abspath(f) for f in files]
-    
+   
     count = len(fuzzed)
     for idx, input in zip(range(count), fuzzed):
-        print '[{0}/{1}] {2}:'.format(idx + 1, count, input)
+        print('[{0}/{1}] {2}:'.format(idx + 1, count, input))
 
         # Touch the file, run the incremental build and read timestamps.
-        with project.touch(input):
-            project.build()
-            t1 = read_mtimes(outputs)
+        t0 = read_mtimes(outputs)
+        with project.touch(input): project.build()
+        t1 = read_mtimes(outputs)
         
         # Find the set of changed files.
         modified = set()
-        for k, v in t0.iteritems():
-            if v != t1[k] and project.is_output(k):
+        for k, v in t0.items():
+            if v < t1[k] and project.is_output(k):
                 modified.add(k)
+        
+        # Reset the project.
+        for f in outputs:
+            if os.path.exists(f):
+                os.utime(f, None)
 
         # Find expected changes.
         deps = graph.find_deps(input)
         expected = {f for f in deps & outputs if project.is_output(f)}
-        
+
         # Report differences.
         if modified != expected:
-            over = False
-            under = False
-
             redundant = graph.prune_transitive(modified - expected)
             for f in sorted(redundant):
-                over = True
-                print '  + {} ({})'.format(f, built_by[f])
+                print('  + {} ({})'.format(f, built_by[f]))
             
             missing = graph.prune_transitive(expected - modified)
             for f in sorted(missing):
-                under = True
-                print '  - {} ({})'.format(f, built_by[f])
+                print('  - {} ({})'.format(f, built_by[f]))
 
-            if under:
-                project.clean()
-                project.build()
-                t1 = read_mtimes(outputs)
-
-        t0 = t1
 
 
 def query(project, files):
     """Queries the dependencies of a set of files."""
 
-    _, _, built_by, graph = parse_graph(project.tmpPath)
+    _, _, built_by, graph = parse_graph(project.graph)
 
     for f in files:
         path = os.path.abspath(f)
-        print f, ':'
+        print(f, ':')
         for dep in sorted(graph.find_deps(path)):
             skip = False
             for dir in ['/proc/', '/tmp/', '/dev/']:
@@ -465,13 +495,13 @@ def query(project, files):
                 continue
             if dep.startswith(project.projectPath):
                 dep = dep[len(project.projectPath) + 1:]
-            print '  ', dep
+            print('  ', dep)
 
 
 def list_files(project, files):
     """Lists the files in the project to be fuzzed."""
 
-    inputs, outputs, built_by, graph = parse_graph(project.tmpPath)
+    inputs, outputs, built_by, graph = parse_graph(project.graph)
     if len(files) == 0:
         fuzzed = sorted([f for f in inputs - outputs if project.filter_in(f)])
     else:
@@ -479,13 +509,13 @@ def list_files(project, files):
     
     count = len(fuzzed)
     for idx, input in zip(range(count), fuzzed):
-        print input
+        print(input)
 
 
 def parse_test(project, path):
   """Compares the dynamic graph to the parsed one."""
 
-  inputs, outputs, built_by, graph = parse_graph(project.tmpPath)
+  inputs, outputs, built_by, graph = parse_graph(project.graph)
 
   fuzzed = sorted([f for f in inputs - outputs if project.filter_in(f)])
   count = len(fuzzed)
@@ -510,23 +540,23 @@ def parse_test(project, path):
     return viz
 
   for idx, input in zip(range(count), fuzzed):
-      print '[{0}/{1}] {2}:'.format(idx + 1, count, input)
+      print('[{0}/{1}] {2}:'.format(idx + 1, count, input))
 
       expected = graph.find_deps(input) & outputs
       actual = traverse_graph(input, set())
       if actual != expected:
         for f in sorted(actual):
           if f not in expected:
-            print '  +', f
+            print('  +', f)
 
         for f in sorted(expected):
           if f not in actual:
-            print '  -', f
+            print('  -', f)
 
 def race_test(project):
     """Test for race conditions."""
     
-    inputs, outputs, built_by, graph = parse_graph(project.tmpPath)
+    inputs, outputs, built_by, graph = parse_graph(project.graph)
     fuzzed = {f for f in outputs & inputs if project.filter_tmp(f)}
     
     # Create a copy of the graph from which missing edges will be removed.
@@ -538,7 +568,6 @@ def race_test(project):
     project.clean()
     project.build()
     
-    t0 = read_mtimes(outputs)
     missing_edges = []
     for input in sorted(fuzzed):
         deps = graph.find_deps(input)
@@ -546,15 +575,20 @@ def race_test(project):
             continue
 
         # Touch the file, run the incremental build and read timestamps.
-        with project.touch(input):
-            project.build()
-            t1 = read_mtimes(outputs)
+        t0 = read_mtimes(outputs)
+        with project.touch(input): project.build()
+        t1 = read_mtimes(outputs)
         
         # Find the set of changed files.
         modified = set()
         for k, v in t0.iteritems():
             if v != t1[k] and project.is_output(k):
                 modified.add(k)
+        
+        # Reset the project.
+        for f in outputs:
+            if os.path.exists(f):
+                os.utime(f, None)
         
         # Find expected changes.
         deps = graph.find_deps(input)
@@ -568,14 +602,6 @@ def race_test(project):
                 if project.filter_tmp(f):
                     missing_edges.append((input, f))
                     build_graph[f].remove(input)
-           
-            # Rebuild if targets stale.
-            if missing:
-                project.clean()
-                project.build()
-                t1 = read_mtimes(outputs)
-
-        t0 = t1
     
     # Find the best and worst time a node can be scheduled in the build graph.
     graphs = {}
@@ -594,42 +620,47 @@ def race_test(project):
         if graphs[node] > build_graphs[node]:
             race_files.add(node)
     
-    print 'Races:'
+    print('Races:')
     for f in graph.prune_transitive(race_files):
-        print f, built_by[f]
+        print(f, built_by[f])
 
-    print 'Missing edges:'
+    print('Missing edges:')
     for src, dst in missing_edges:
-        print src, ' -> ', dst
+        print(src, ' -> ', dst)
 
 
 
 def get_project(root, args):
     """Identifies the type of the project."""
-     
+    
+    graph = args.graph_path
+    rule_path = args.rule_path
+    use_hash = args.use_hash
+    argv = [args.argv] if args.argv else []
+
     # CMake builds.
     if os.path.isfile(os.path.join(root, 'CMakeCache.txt')):
         projectDir = os.path.normpath(os.path.join(root, os.pardir))
         if os.path.isfile(os.path.join(projectDir, 'CMakeLists.txt')):
             # Out of source.
             if os.path.isfile(os.path.join(root, 'Makefile')):
-                return CMakeMake(projectDir, root, args.tmp_path)
+                return CMakeMake(projectDir, root, graph, rule_path, use_hash, argv)
             if os.path.isfile(os.path.join(root, 'build.ninja')):
-                return CMakeNinja(projectDir, root, args.tmp_path)
+                return CMakeNinja(projectDir, root, graph, rule_path, use_hash, argv)
         else:
             # In-source.
             if os.path.isfile(os.path.join(root, 'Makefile')):
-                return CMakeMake(root, root, args.tmp_path)
+                return CMakeMake(root, root, graph, rule_path, use_hash, argv)
             if os.path.isfile(os.path.join(root, 'build.ninja')):
-                return CMakeNinja(root, root, args.tmp_path)
+                return CMakeNinja(root, root, graph, rule_path, use_hash, argv)
     
     # Manual GNU Make build.
     if os.path.isfile(os.path.join(root, 'Makefile')):
-        return Make(root, args.tmp_path)
+        return Make(root, graph, rule_path, use_hash, argv)
 
     # SCons build.
     if os.path.isfile(os.path.join(root, 'SConstruct')):
-        return SCons(root, args.tmp_path)
+        return SCons(root, graph, rule_path, use_hash, argv)
 
     raise RuntimeError('Unknown project type')
 
@@ -638,10 +669,10 @@ def main():
     parser = argparse.ArgumentParser(description='Build Fuzzer')
 
     parser.add_argument(
-        '--tmp-path',
+        '--graph-path',
         type=str,
         default='/tmp/mkcheck',
-        help='Path to the temporary output file'
+        help='Path to the graph file'
     )
     parser.add_argument(
         'cmd',
@@ -655,6 +686,22 @@ def main():
         type=str,
         nargs='*',
         help='Input files'
+    )
+    parser.add_argument(
+        '--rule-path',
+        type=str,
+        help='Path to the rule file'
+    )
+    parser.add_argument(
+        '--use-hash',
+        action='store_true',
+        help='Change content hashes instead of timestamps'
+    )
+    parser.add_argument(
+        '--argv',
+        type=str,
+        default='',
+        help='Additional arguments to make'
     )
 
     args = parser.parse_args()

@@ -18,7 +18,6 @@ def run_proc(*args, **kwargs):
     )
     stdout, stderr = proc.communicate()
     if proc.returncode != 0:
-        print stdout
-        print stderr
+        print(stdout, '\n', stderr)
         sys.stdout.flush()
         raise Exception('Command "%s" failed: %d' % (' '.join(args[0]), proc.returncode))

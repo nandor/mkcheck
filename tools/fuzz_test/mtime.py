@@ -6,8 +6,11 @@ import os
 
 
 
-def read_mtimes(files):
+def read_mtimes(paths):
     mtimes = {}
-    for file in files:
-        mtimes[file] = os.path.getmtime(file)
+    for path in paths:
+        if os.path.exists(path):
+            mtimes[path] = os.path.getmtime(path)
+        else:
+            mtimes[path] = 0
     return mtimes

@@ -88,13 +88,13 @@ def parse_graph(path):
         for proc in data["procs"]:
             proc_in = set(proc.get('input', []))
             proc_out = set(proc.get('output', []))
-
+            
             inputs = inputs | proc_in
             outputs = outputs | proc_out
             image = os.path.basename(files[proc['image']]['name'])
             for output in proc_out:
                 built_by[files[output]['name']] = image
-
+    
     def persisted(uid):
         if files[uid].get('deleted', False):
             return False
@@ -125,11 +125,11 @@ def parse_graph(path):
       outs.update(proc.get('output', []))
    
     edges = defaultdict(list)
-    for uid, file in files.iteritems():
+    for uid, file in files.items():
         for dep in file.get('deps', []):
             edges[files[dep]['name']].append(files[uid]['name'])
    
-    for _, (ins, outs) in groups.iteritems():
+    for _, (ins, outs) in groups.items():
         for input in ins - outs:
             if files[input]['name'] in ['/dev/stderr', '/dev/stdout']:
                 continue
