@@ -195,7 +195,7 @@ class Make(Project):
     
         # Run the build with mkcheck.
         run_proc(
-          [ TOOL_PATH, "--output={0}".format(self.graph), "--", "make" ],
+          [ TOOL_PATH, "--output={0}".format(self.graph), "--", "make" ] + self._args,
           cwd=self.buildPath
         )
 
@@ -209,7 +209,7 @@ class Make(Project):
 
     def build(self):
         """Performs an incremental build."""
-
+        
         run_proc([ "make"] + self._args, cwd=self.buildPath)
 
     def in_project(self, f):
@@ -615,10 +615,10 @@ def race_test(project):
         self = {node} if node in outputs else set()
         
         graphs[node] = self.union(
-            *[graphs[p] for p in graph.rev_nodes[node].edges]
+            *[graphs.get(p, set()) for p in graph.rev_nodes[node].edges]
         )
         build_graphs[node] = self.union(
-            *[build_graphs[p] for p in build_graph[node]]
+            *[build_graphs.get(p, set()) for p in build_graph[node]]
         )
             
         if graphs[node] > build_graphs[node]:
@@ -640,7 +640,7 @@ def get_project(root, args):
     graph = args.graph_path
     rule_path = args.rule_path
     use_hash = args.use_hash
-    argv = [args.argv] if args.argv else []
+    argv = args.argv.split(',') if args.argv else []
 
     # CMake builds.
     if os.path.isfile(os.path.join(root, 'CMakeCache.txt')):
