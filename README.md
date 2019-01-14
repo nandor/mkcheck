@@ -5,14 +5,14 @@ Incremental Build Verification
 # Supported Platforms
 
 Due to use of the ```ptrace``` system call, mkcheck only supports Linux-based operating systems at this time.
-Python 2 is required for fuzz testing.
+Python 2 is required for fuzz testing. ```mkcheck``` only compiles with clang at this time.
 
 # Building
 
 ```
 mkdir -C Release
 cd Release
-cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++
 make
 ```
 
