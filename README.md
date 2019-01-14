@@ -37,13 +37,21 @@ Fuzz testing is performed using a Python script, executed out of the directory o
 
 ```
 cd <project-dir>
-python fuzz_test.py --graph-path=<path-to-graph> fuzz|list|query|build
+python fuzz_test.py --graph-path=<path-to-graph> fuzz|list|query|build|race
 ```
 
 Other options to the fuzzing script are:
 * ```--rule-path``` specifies the path to a YAML file containing regexes to filter out files. The document should be a map from the keys ```"filter_in"```, ```"filter_out"```, ```"filter_tmp"``` to lists of regexes which blacklist irrelevant inputs, outputs and files considered for race testing.
 * ```--use-hash``` forces the use of content hashing.
 * ```--argv``` specifies additional arguments to GNU Make projects.
+
+The fuzzing script supports the following commands:
+
+* _fuzz_ perform fuzz testing on the project. If only a few files are to be tested, their paths can be passed as optional arguments. If no files are specified, all unfiltered files are considered.
+* _list_ list the files which are considered by default
+* _query_ query the dependencies of a file from the graph
+* _build_ run a build and generate the graph, overwriting it
+* _race_ perform race testing
 
 # License
 
