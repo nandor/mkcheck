@@ -35,6 +35,7 @@ $(OUT)/c.h : c.in
 	head -n 4 c.in > $(OUT)/c.h
 	tail -n 11 c.in > $(OUT)/c.cpp
 
+# missing deps on a.h, b.h
 $(OUT)/c.o : $(OUT)/c.h $(OUT)/c.cpp
 	$(CC) -c -o $(OUT)/c.o $(OUT)/c.cpp
 
