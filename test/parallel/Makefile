@@ -53,7 +53,7 @@ test :
 	make clean
 	../../build/mkcheck -o /tmp/graph -- make -j1
 	@echo "Fuzzing parallel"
-	python ../../tools/fuzz_test --graph-path=/tmp/graph fuzz	
+	python3 ../../tools/fuzz_test --graph-path=/tmp/graph fuzz
 	@echo "Race testing parallel"
-	python ../../tools/fuzz_test --graph-path=/tmp/graph race
+	python3 ../../tools/fuzz_test --graph-path=/tmp/graph race
     

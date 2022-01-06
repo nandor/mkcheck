@@ -7,7 +7,7 @@ project(mkcheck CXX)
 
 find_package(Boost COMPONENTS system filesystem program_options REQUIRED)
 
-add_compile_options(-std=c++1y)
+add_compile_options(-std=c++17)
 
 add_executable(mkcheck
     mkcheck/fd.cpp

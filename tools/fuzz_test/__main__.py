@@ -103,9 +103,12 @@ class Project(object):
             filter_tmp = self.FILTER_TMP
             filter_out = self.FILTER_OUT
 
-        self._filter_in = [re.compile('^' + f + '$') for f in filter_in]
-        self._filter_tmp = [re.compile('^' + f + '$') for f in filter_tmp]
-        self._filter_out = [re.compile('^' + f + '$') for f in filter_out]
+        def regex(pat):
+            return re.compile(('^' + pat + '$').replace('\\', '\\\\'))
+
+        self._filter_in = [regex(f) for f in filter_in]
+        self._filter_tmp = [regex(f) for f in filter_tmp]
+        self._filter_out = [regex(f) for f in filter_out]
 
     def filter_in(self, f):
         """Decides if the file is relevant to the project."""

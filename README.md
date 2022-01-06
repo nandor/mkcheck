@@ -10,8 +10,8 @@ Python 2 is required for fuzz testing. ```mkcheck``` only compiles with clang at
 # Building
 
 ```
-mkdir -C Release
-cd Release
+mkdir build
+cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++
 make
 ```
@@ -34,10 +34,11 @@ mkcheck --output=<path-to-graph> -- <build command>
 ## Build Fuzzing
 
 Fuzz testing is performed using a Python script, executed out of the directory of the project under test. The dependency graph must be inferred beforehand and stored at a path accesible to the fuzzing tool.
+`<path-to-fuzz_test>` must point to the `tools/fuzz_test` directory of the project.
 
 ```
 cd <project-dir>
-python fuzz_test.py --graph-path=<path-to-graph> fuzz|list|query|build|race
+python <path-to-fuzz_test> --graph-path=<path-to-graph> fuzz|list|query|build|race
 ```
 
 Other options to the fuzzing script are:
