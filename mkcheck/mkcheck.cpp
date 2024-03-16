@@ -343,7 +343,8 @@ int RunTracer(const fs::path &output, pid_t root)
       }
       case SYS_vfork:
       case SYS_fork: 
-      case SYS_clone: {
+      case SYS_clone:
+      case SYS_clone3: {
         // Try to wait for the exit event of this sycall before any others.
         waitFor = state->IsExiting() ? -1 : pid;
         break;
